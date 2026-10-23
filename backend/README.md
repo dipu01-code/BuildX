@@ -1,6 +1,6 @@
 # BUILDX backend
 
-The backend is a Python 3.10+ FastAPI service. Phase 3 provides the API foundation only; it does not start automatically with Electron and does not yet access a database, projects, files, or AI providers.
+The backend is a Python 3.10+ FastAPI service. Phase 4 adds SQLite persistence and Alembic migration infrastructure. The service does not start automatically with Electron and does not yet implement project, file, or AI workflows.
 
 ## Setup and run
 
@@ -21,6 +21,24 @@ Run tests with:
 uv run pytest
 ```
 
+## Database
+
+`app/db/base.py` owns the shared declarative base, `app/db/models/` registers approved ORM models, and `app/db/session.py` creates SQLite engines and request-scoped sessions. SQLite foreign-key checks are enabled on each connection. Routes own successful transaction commits; the dependency rolls back an active transaction when a handler raises and always closes the session. No tables are created implicitly at application startup.
+
+The default database is `buildx.db` in the OS-specific persistent user data directory: macOS `~/Library/Application Support/BUILDX`, Windows `%APPDATA%/BUILDX`, and Linux `$XDG_DATA_HOME/buildx` (default `~/.local/share/buildx`). Set `BUILDX_DATA_DIR` to override that directory; packaged Electron should pass `app.getPath('userData')` as this variable to the backend process. Alternatively, `BUILDX_DATABASE_URL` accepts a SQLite URL and takes precedence. Only SQLite URLs are supported. SQLite is not an encryption mechanism; use OS file permissions and future approved secret-storage design for sensitive data.
+
+The initial revision is intentionally empty because no domain schema was approved in Phase 0. It creates only Alembic's `alembic_version` tracking table. From `backend/`, initialize/apply migrations with:
+
+```sh
+uv run alembic upgrade head
+uv run alembic current
+uv run alembic revision --autogenerate -m "describe schema change"
+```
+
+Review every generated revision before applying it; migrations are the source of schema changes, not `Base.metadata.create_all()`. Run the isolated database suite with `uv run pytest tests/test_database.py`. Tests use pytest temporary directories and never touch the configured application data directory. They also apply the migration twice to a fresh temporary database. For a one-off test database, set `BUILDX_DATABASE_URL=sqlite:////absolute/path/to/test.db` or `BUILDX_DATA_DIR` to a disposable directory.
+
+SQLite is suitable for this single-user local-first foundation, but it serializes writes and is not a multi-process coordination or encryption layer. Backup/recovery policy, domain tables, concurrency strategy, and Electron process lifecycle remain future design work.
+
 ## Configuration
 
 Settings use the `BUILDX_` environment prefix. `.env` is read for local development and is ignored by Git. The supported values are:
@@ -33,6 +51,8 @@ Settings use the `BUILDX_` environment prefix. `.env` is read for local developm
 | `BUILDX_API_PREFIX` | `/api/v1` | Versioned route prefix |
 | `BUILDX_HOST` | `127.0.0.1` | Loopback bind address |
 | `BUILDX_PORT` | `0` | Port; zero requests an OS-assigned available port |
+| `BUILDX_DATA_DIR` | OS-specific user data directory | Directory for persistent local application data; Electron should pass `app.getPath('userData')` |
+| `BUILDX_DATABASE_URL` | SQLite file under the data directory | Optional explicit SQLite database URL |
 
 Invalid values fail settings validation instead of silently falling back.
 
