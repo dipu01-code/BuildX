@@ -19,8 +19,15 @@ beforeEach(async () => {
   outsideRoot = path.join(tempRoot, 'outside');
   await fs.mkdir(projectRoot);
   await fs.mkdir(outsideRoot);
-  projectApi = { getProject: async () => ({ id: projectId, name: 'Fixture', root_path: projectRoot }) };
+  const record = { id: projectId, name: 'Fixture', root_path: projectRoot };
+  projectApi = {
+    getProject: async () => record,
+    updateProject: async (_id, update) => Object.assign(record, update),
+  };
   workspace = createWorkspaceFiles();
+  await workspace.chooseDirectory(projectApi, projectId, {
+    showOpenDialog: async () => ({ canceled: false, filePaths: [projectRoot] }),
+  }, null);
 });
 
 afterEach(async () => { await fs.rm(tempRoot, { recursive: true, force: true }); });
@@ -53,6 +60,20 @@ describe('project-scoped workspace filesystem', () => {
     await expect(workspace.readText(projectApi, projectId, 'large.txt')).rejects.toThrow(/too large/i);
   });
 
+  it('saves atomically and rejects an external modification without overwriting it', async () => {
+    const target = path.join(projectRoot, 'edit.ts');
+    await fs.writeFile(target, 'const value = 1;');
+    const opened = await workspace.readText(projectApi, projectId, 'edit.ts');
+    const saved = await workspace.writeText(projectApi, projectId, 'edit.ts', 'const value = 2;', opened.revision);
+    expect(await fs.readFile(target, 'utf8')).toBe('const value = 2;');
+    expect(saved.revision).not.toBe(opened.revision);
+    await fs.writeFile(target, 'const value = 3;');
+    await expect(workspace.writeText(projectApi, projectId, 'edit.ts', 'const value = 4;', saved.revision))
+      .rejects.toThrow(/changed on disk/i);
+    expect(await fs.readFile(target, 'utf8')).toBe('const value = 3;');
+    expect((await fs.readdir(projectRoot)).some((name) => name.endsWith('.tmp'))).toBe(false);
+  });
+
   it('creates without overwriting, renames, moves and deletes only scoped items', async () => {
     await workspace.createFile(projectApi, projectId, 'new.txt');
     await expect(workspace.createFile(projectApi, projectId, 'new.txt')).rejects.toThrow(/already exists/i);
@@ -82,6 +103,17 @@ describe('project-scoped workspace filesystem', () => {
   it('requires an existing configured project directory', async () => {
     projectApi.getProject = async () => ({ id: projectId, name: 'Missing', root_path: null });
     await expect(workspace.list(projectApi, projectId, '')).rejects.toThrow(/choose a project directory/i);
+  });
+
+  it('does not authorize a directory merely because it is stored in the project record', async () => {
+    const freshWorkspace = createWorkspaceFiles();
+    await expect(freshWorkspace.list(projectApi, projectId, '')).rejects.toThrow(/native folder picker/i);
+  });
+
+  it('invalidates authorization if the persisted project path changes', async () => {
+    await fs.mkdir(path.join(tempRoot, 'replacement'));
+    await projectApi.updateProject(projectId, { root_path: path.join(tempRoot, 'replacement') });
+    await expect(workspace.list(projectApi, projectId, '')).rejects.toThrow(/saved project folder changed/i);
   });
 
   it('associates only a user-selected accessible directory and leaves cancel unchanged', async () => {

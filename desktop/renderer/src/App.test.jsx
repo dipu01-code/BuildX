@@ -1,6 +1,12 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+vi.mock('./CodeEditor.jsx', async () => {
+  const ReactRuntime = await import('react');
+  return { default: ({ path, value, onChange }) => ReactRuntime.createElement('textarea', {
+    'aria-label': `Editor ${path}`, value, onChange: (event) => onChange(event.target.value),
+  }) };
+});
 import App from './App.jsx';
 
 function project(overrides = {}) {
@@ -33,6 +39,7 @@ describe('BUILDX project management', () => {
       chooseProjectDirectory: vi.fn(),
       listWorkspaceDirectory: vi.fn().mockResolvedValue({ path: '', entries: [] }),
       readWorkspaceText: vi.fn(),
+      writeWorkspaceText: vi.fn(),
       createWorkspaceFile: vi.fn(),
       createWorkspaceFolder: vi.fn(),
       moveWorkspaceItem: vi.fn(),
@@ -187,7 +194,7 @@ describe('BUILDX project management', () => {
     fireEvent.click(screen.getByRole('button', { name: /open workspace/i }));
     expect(await screen.findByText('/tmp/buildx-fixture')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Select README.md' }));
-    expect(await screen.findByText('Hello workspace')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Editor README.md')).toHaveValue('Hello workspace');
     expect(window.buildxDesktop.readWorkspaceText).toHaveBeenCalledWith(existing.id, 'README.md');
   });
 
@@ -200,9 +207,103 @@ describe('BUILDX project management', () => {
     openProjects();
     fireEvent.click(await screen.findByText('Atlas'));
     fireEvent.click(screen.getByRole('button', { name: /choose project folder/i }));
-    expect(await screen.findByText(/Not set. Choose a directory/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Not set. Choose a folder/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /choose project folder/i }));
     expect(await screen.findByText('/tmp/selected-project')).toBeInTheDocument();
+  });
+
+  it('keeps same-named files in separate editor tabs and shows unsaved state', async () => {
+    const existing = project({ root_path: '/tmp/buildx-fixture' });
+    window.buildxDesktop.listProjects.mockResolvedValue([existing]);
+    window.buildxDesktop.listWorkspaceDirectory.mockImplementation(async (_id, relativePath) => ({ path: relativePath, entries: relativePath
+      ? [{ name: 'index.js', path: `${relativePath}/index.js`, type: 'file', size: 12 }]
+      : [{ name: 'src', path: 'src', type: 'directory', size: null }, { name: 'test', path: 'test', type: 'directory', size: null }] }));
+    window.buildxDesktop.readWorkspaceText.mockImplementation(async (_id, filePath) => ({
+      path: filePath, content: filePath.startsWith('src/') ? 'const source = 1;' : 'const test = 1;', size: 16,
+      encoding: 'utf-8', revision: 'a'.repeat(64),
+    }));
+    window.buildxDesktop.writeWorkspaceText.mockResolvedValue({ revision: 'b'.repeat(64), size: 16 });
+    render(<App />);
+    openProjects();
+    fireEvent.click(await screen.findByText('Atlas'));
+    fireEvent.click(screen.getByRole('button', { name: /open workspace/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand src' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Select index.js' }));
+    expect(await screen.findByLabelText('Editor src/index.js')).toHaveValue('const source = 1;');
+    fireEvent.click(screen.getByRole('button', { name: 'Expand test' }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Select index.js' })).toHaveLength(2));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Select index.js' })[1]);
+    expect(await screen.findByLabelText('Editor test/index.js')).toHaveValue('const test = 1;');
+    expect(screen.getAllByRole('tab', { name: 'index.js' })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('tab', { name: 'index.js' })[0]);
+    expect(screen.getByLabelText('Editor src/index.js')).toHaveValue('const source = 1;');
+    fireEvent.change(screen.getByLabelText('Editor src/index.js'), { target: { value: 'const source = 2;' } });
+    expect(await screen.findByText('UNSAVED')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(window.buildxDesktop.writeWorkspaceText).toHaveBeenCalledWith(
+      existing.id, 'src/index.js', 'const source = 2;', 'a'.repeat(64),
+    ));
+    expect(await screen.findByText('SAVED')).toBeInTheDocument();
+  });
+
+  it('warns before closing a dirty tab and supports save, discard, and cancel choices', async () => {
+    const existing = project({ root_path: '/tmp/buildx-fixture' });
+    window.buildxDesktop.listProjects.mockResolvedValue([existing]);
+    window.buildxDesktop.listWorkspaceDirectory.mockResolvedValue({ path: '', entries: [
+      { name: 'main.py', path: 'main.py', type: 'file', size: 8 },
+    ] });
+    window.buildxDesktop.readWorkspaceText.mockResolvedValue({ path: 'main.py', content: 'print(1)', revision: 'a'.repeat(64), size: 8 });
+    window.buildxDesktop.writeWorkspaceText.mockResolvedValue({ revision: 'b'.repeat(64), size: 8 });
+    render(<App />);
+    openProjects();
+    fireEvent.click(await screen.findByText('Atlas'));
+    fireEvent.click(screen.getByRole('button', { name: /open workspace/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Select main.py' }));
+    fireEvent.change(await screen.findByLabelText('Editor main.py'), { target: { value: 'print(2)' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tasks' })[0]);
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(/unsaved workspace/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+    expect(screen.getByLabelText('Editor main.py')).toHaveValue('print(2)');
+    fireEvent.click(screen.getByRole('button', { name: 'Close main.py' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(/save changes/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByLabelText('Editor main.py')).toHaveValue('print(2)');
+    fireEvent.click(screen.getByRole('button', { name: 'Close main.py' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save and close' }));
+    await waitFor(() => expect(screen.queryByLabelText('Editor main.py')).not.toBeInTheDocument());
+    expect(window.buildxDesktop.writeWorkspaceText).toHaveBeenCalledWith(existing.id, 'main.py', 'print(2)', 'a'.repeat(64));
+  });
+
+  it('keeps failed saves dirty and offers a copy when the disk version changed', async () => {
+    const existing = project({ root_path: '/tmp/buildx-fixture' });
+    window.buildxDesktop.listProjects.mockResolvedValue([existing]);
+    window.buildxDesktop.listWorkspaceDirectory.mockResolvedValue({ path: '', entries: [
+      { name: 'main.ts', path: 'main.ts', type: 'file', size: 8 },
+    ] });
+    window.buildxDesktop.readWorkspaceText.mockImplementation(async (_id, pathValue) => ({
+      path: pathValue, content: pathValue === 'recovered.ts' ? '' : 'const x=1;', size: 8,
+      revision: pathValue === 'recovered.ts' ? 'c'.repeat(64) : 'a'.repeat(64), encoding: 'utf-8',
+    }));
+    window.buildxDesktop.writeWorkspaceText.mockRejectedValueOnce(new Error('This file changed on disk since it was opened.'))
+      .mockResolvedValueOnce({ revision: 'd'.repeat(64), size: 12 });
+    render(<App />);
+    openProjects();
+    fireEvent.click(await screen.findByText('Atlas'));
+    fireEvent.click(screen.getByRole('button', { name: /open workspace/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Select main.ts' }));
+    fireEvent.change(await screen.findByLabelText('Editor main.ts'), { target: { value: 'const x=2;' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/changed on disk/i);
+    expect(screen.getByLabelText('Editor main.ts')).toHaveValue('const x=2;');
+    fireEvent.click(screen.getByRole('button', { name: 'Save as copy' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('New file name'), { target: { value: 'recovered.ts' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save copy' }));
+    await waitFor(() => expect(window.buildxDesktop.writeWorkspaceText).toHaveBeenLastCalledWith(
+      existing.id, 'recovered.ts', 'const x=2;', 'c'.repeat(64),
+    ));
+    expect(await screen.findByLabelText('Editor recovered.ts')).toHaveValue('const x=2;');
+    expect(await screen.findByText('SAVED')).toBeInTheDocument();
   });
 
   it('deletes a project after confirmation without deleting local files', async () => {

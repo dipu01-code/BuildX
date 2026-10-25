@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { TextDecoder } = require('node:util');
 
@@ -53,9 +54,16 @@ function safeOperation(operation) {
 }
 
 function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {}) {
+  const authorizedRoots = new Map();
+  function getRevision(bytes) { return crypto.createHash('sha256').update(bytes).digest('hex'); }
+
   async function getRoot(projectApi, projectId) {
     const project = await projectApi.getProject(projectId);
     if (!project.root_path) throw controlledError('Choose a project directory before opening its workspace.', 'NO_PROJECT_DIRECTORY');
+    const authorizedRoot = authorizedRoots.get(projectId);
+    if (!authorizedRoot) {
+      throw controlledError('Confirm this project folder with the native folder picker before opening its workspace.', 'PROJECT_DIRECTORY_NOT_CONFIRMED');
+    }
     let root;
     try {
       root = await fsImpl.realpath(project.root_path);
@@ -63,6 +71,10 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
       if (!stats.isDirectory()) throw new Error('not a directory');
     } catch {
       throw controlledError('The project directory is missing or inaccessible. Choose it again to continue.', 'PROJECT_DIRECTORY_UNAVAILABLE');
+    }
+    if (root !== authorizedRoot) {
+      authorizedRoots.delete(projectId);
+      throw controlledError('The saved project folder changed. Choose it again to confirm workspace access.', 'PROJECT_DIRECTORY_CHANGED');
     }
     return root;
   }
@@ -155,7 +167,7 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
         let content;
         try { content = new TextDecoder('utf-8', { fatal: true }).decode(contentBytes); }
         catch { throw controlledError('This file is not valid UTF-8 text and cannot be previewed.', 'INVALID_TEXT'); }
-        return { path: relativePath, content, size: info.size, encoding: 'utf-8' };
+        return { path: relativePath, content, size: info.size, encoding: 'utf-8', revision: getRevision(contentBytes) };
       } finally {
         await handle?.close();
       }
@@ -168,6 +180,51 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
       const handle = await fsImpl.open(target, 'wx', 0o600);
       await handle.close();
       return { path: relativePath };
+    });
+  }
+
+  async function writeText(projectApi, projectId, relativePath, content, expectedRevision) {
+    return withRoot(projectApi, projectId, async (root) => {
+      if (typeof content !== 'string' || typeof expectedRevision !== 'string' || !/^[0-9a-f]{64}$/.test(expectedRevision)) {
+        throw controlledError('The file content or save revision is invalid.', 'INVALID_SAVE');
+      }
+      const contentBytes = Buffer.from(content, 'utf8');
+      if (contentBytes.length > MAX_TEXT_FILE_BYTES) {
+        throw controlledError('This file exceeds the 1 MiB editor limit and cannot be saved.', 'FILE_TOO_LARGE');
+      }
+      const initial = await resolvePath(root, relativePath);
+      const initialStats = await fsImpl.stat(initial.target);
+      if (!initialStats.isFile()) throw controlledError('Only regular files can be saved from the editor.', 'NOT_A_FILE');
+      if (initialStats.size > MAX_TEXT_FILE_BYTES) {
+        throw controlledError('This file is now larger than the 1 MiB editor limit. Your unsaved edits are still available; save them as a copy or review the file outside BUILDX.', 'FILE_CONFLICT');
+      }
+      const current = await fsImpl.readFile(initial.target);
+      if (getRevision(current) !== expectedRevision) {
+        throw controlledError('This file changed on disk since it was opened. Your unsaved edits are still available; save them as a copy or reload the latest file.', 'FILE_CONFLICT');
+      }
+      const parent = path.dirname(initial.target);
+      const temporaryPath = path.join(parent, `.buildx-${crypto.randomUUID()}.tmp`);
+      let handle;
+      try {
+        handle = await fsImpl.open(temporaryPath, 'wx', initialStats.mode & 0o777);
+        await handle.writeFile(contentBytes);
+        await handle.sync();
+        await handle.close();
+        handle = null;
+        const latest = await resolvePath(root, relativePath);
+        if ((await fsImpl.stat(latest.target)).size > MAX_TEXT_FILE_BYTES) {
+          throw controlledError('This file grew beyond the 1 MiB editor limit while saving. Your unsaved edits are still available; save them as a copy or review the file outside BUILDX.', 'FILE_CONFLICT');
+        }
+        const latestBytes = await fsImpl.readFile(latest.target);
+        if (getRevision(latestBytes) !== expectedRevision) {
+          throw controlledError('This file changed on disk while saving. Your unsaved edits are still available; save them as a copy or reload the latest file.', 'FILE_CONFLICT');
+        }
+        await fsImpl.rename(temporaryPath, latest.target);
+        return { path: relativePath, size: contentBytes.length, revision: getRevision(contentBytes) };
+      } finally {
+        await handle?.close();
+        await fsImpl.rm(temporaryPath, { force: true }).catch(() => {});
+      }
     });
   }
 
@@ -231,12 +288,14 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
       throw controlledError('The selected location is not an accessible directory.', 'INVALID_PROJECT_DIRECTORY');
     }
     const updated = await projectApi.updateProject(projectId, { root_path: canonical });
+    authorizedRoots.set(projectId, canonical);
     return { canceled: false, project: updated };
   }
 
   return Object.freeze({
     list: safeOperation(list),
     readText: safeOperation(readText),
+    writeText: safeOperation(writeText),
     createFile: safeOperation(createFile),
     createFolder: safeOperation(createFolder),
     move: safeOperation(move),

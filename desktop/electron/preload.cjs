@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('buildxDesktop', Object.freeze({
   chooseProjectDirectory: (projectId) => ipcRenderer.invoke('workspace:choose-directory', projectId),
   listWorkspaceDirectory: (projectId, relativePath = '') => ipcRenderer.invoke('workspace:list', projectId, relativePath),
   readWorkspaceText: (projectId, relativePath) => ipcRenderer.invoke('workspace:read-text', projectId, relativePath),
+  writeWorkspaceText: (projectId, relativePath, content, revision) => ipcRenderer.invoke('workspace:write-text', projectId, relativePath, content, revision),
   createWorkspaceFile: (projectId, relativePath) => ipcRenderer.invoke('workspace:create-file', projectId, relativePath),
   createWorkspaceFolder: (projectId, relativePath) => ipcRenderer.invoke('workspace:create-folder', projectId, relativePath),
   moveWorkspaceItem: (projectId, fromPath, toPath) => ipcRenderer.invoke('workspace:move', projectId, fromPath, toPath),

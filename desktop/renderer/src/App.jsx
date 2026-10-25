@@ -1,4 +1,7 @@
-import React, { Component, useEffect, useRef, useState } from 'react';
+import React, { Component, lazy, useEffect, useRef, useState } from 'react';
+import { languageNameForPath } from './editor-language-name.js';
+
+const CodeEditor = lazy(() => import('./CodeEditor.jsx'));
 
 const sections = [
   { id: 'home', label: 'Overview', icon: '⌂' },
@@ -56,7 +59,7 @@ function ProjectManagementView({
     {error && <div className="project-error" role="alert"><span>{error}</span><Button className="quiet-button" onClick={onRetry}>Retry</Button></div>}
     {selectedProject && <article className="project-detail-card">
       <div className="project-detail-top"><span className="project-card-mark" aria-hidden="true">{selectedProject.name.slice(0, 1).toUpperCase()}</span><span className="project-card-meta"><strong>{selectedProject.project_type || 'Uncategorized project'}</strong><small>Updated {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(selectedProject.updated_at))}</small></span></div>
-      <dl className="project-detail-list"><dt>Description</dt><dd>{selectedProject.description || 'No description added.'}</dd><dt>Project directory</dt><dd>{selectedProject.root_path || 'Not set. Choose a directory in the workspace phase.'}</dd></dl>
+      <dl className="project-detail-list"><dt>Description</dt><dd>{selectedProject.description || 'No description added.'}</dd><dt>Project directory</dt><dd>{selectedProject.root_path || 'Not set. Choose a folder to browse project files.'}</dd></dl>
       <div className="project-detail-actions"><Button className="primary-button" onClick={() => selectedProject.root_path ? onOpenWorkspace(selectedProject) : onChooseDirectory(selectedProject)}>{selectedProject.root_path ? 'Open workspace' : 'Choose project folder'} <span aria-hidden="true">↗</span></Button>{selectedProject.root_path && <Button className="quiet-button" onClick={() => onChooseDirectory(selectedProject)}>Change folder</Button>}<Button className="quiet-button" onClick={() => onEdit(selectedProject)}>Edit details</Button><Button className="danger-button" onClick={() => onDelete(selectedProject)}>Delete project</Button></div>
       <p className="project-delete-note">Deleting a project removes only its BUILDX record; local files are left untouched.</p>
     </article>}
@@ -68,11 +71,20 @@ function ProjectManagementView({
   </section>;
 }
 
-function WorkspaceExplorer({ project, onBack, onChangeFolder }) {
+function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection }) {
   const [entriesByPath, setEntriesByPath] = useState({});
   const [expanded, setExpanded] = useState(new Set(['']));
   const [selected, setSelected] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [activeFilePath, setActiveFilePath] = useState(null);
+  const [editorError, setEditorError] = useState('');
+  const [cursor, setCursor] = useState({ line: 1, column: 1 });
+  const [closeTarget, setCloseTarget] = useState(null);
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const [leaveTarget, setLeaveTarget] = useState(null);
+  const [copyTarget, setCopyTarget] = useState(null);
+  const [copyPath, setCopyPath] = useState('');
+  const editorControlsRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [dialog, setDialog] = useState(null);
@@ -97,7 +109,9 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder }) {
     setEntriesByPath({});
     setExpanded(new Set(['']));
     setSelected(null);
-    setPreview(null);
+    setFiles([]);
+    setActiveFilePath(null);
+    setEditorError('');
     loadDirectory('', { initial: true });
   }, [project.id, project.root_path]);
 
@@ -113,10 +127,105 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder }) {
   }
   async function selectEntry(entry) {
     setSelected(entry);
-    setPreview(null);
     if (entry.type !== 'file') return;
-    try { setPreview(await window.buildxDesktop.readWorkspaceText(project.id, entry.path)); }
-    catch (readError) { setError(readError.message || 'This file could not be previewed.'); }
+    const open = files.find((file) => file.path === entry.path);
+    if (open) { setActiveFilePath(open.path); setEditorError(''); return; }
+    setEditorError('');
+    try {
+      const result = await window.buildxDesktop.readWorkspaceText(project.id, entry.path);
+      const file = { path: entry.path, content: result.content, originalContent: result.content, revision: result.revision };
+      setFiles((current) => current.some((item) => item.path === file.path) ? current : [...current, file]);
+      setActiveFilePath(file.path);
+      setCursor({ line: 1, column: 1 });
+    } catch (readError) { setEditorError(readError.message || 'This file could not be opened.'); }
+  }
+  const activeFile = files.find((file) => file.path === activeFilePath) || null;
+  function isDirty(file) { return Boolean(file && file.content !== file.originalContent); }
+  function updateFileContent(filePath, content) {
+    setFiles((current) => current.map((file) => file.path === filePath ? { ...file, content } : file));
+  }
+  async function saveFile(file = activeFile) {
+    if (!file || !isDirty(file)) return true;
+    setEditorError('');
+    try {
+      const result = await window.buildxDesktop.writeWorkspaceText(project.id, file.path, file.content, file.revision);
+      setFiles((current) => current.map((item) => item.path === file.path
+        ? { ...item, originalContent: item.content, revision: result.revision } : item));
+      return true;
+    } catch (saveError) {
+      setEditorError(saveError.message || 'The file could not be saved. Your edits are still available.');
+      return false;
+    }
+  }
+  function closeFile(filePath, force = false) {
+    const file = files.find((item) => item.path === filePath);
+    if (!file) return;
+    if (!force && isDirty(file)) { setCloseTarget(file); return; }
+    const remaining = files.filter((item) => item.path !== filePath);
+    setFiles(remaining);
+    if (activeFilePath === filePath) setActiveFilePath(remaining.at(-1)?.path || null);
+    setCloseTarget(null);
+  }
+  async function saveAndClose() {
+    if (await saveFile(closeTarget)) closeFile(closeTarget.path, true);
+  }
+  async function saveAndLeave() {
+    for (const file of files) {
+      if (isDirty(file) && !(await saveFile(file))) return;
+    }
+    const target = leaveTarget;
+    setLeaveConfirm(false); setLeaveTarget(null);
+    if (target?.section) onNavigateSection(target.section);
+    else onBack();
+  }
+  function leaveWorkspace() {
+    if (files.some(isDirty)) { setLeaveTarget(null); setLeaveConfirm(true); }
+    else onBack();
+  }
+  function finishLeaving() {
+    const target = leaveTarget;
+    setFiles([]); setActiveFilePath(null); setLeaveConfirm(false); setLeaveTarget(null);
+    if (target?.section) onNavigateSection(target.section);
+    else onBack();
+  }
+  useEffect(() => {
+    const onBeforeUnload = (event) => {
+      if (!files.some(isDirty)) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [files]);
+  useEffect(() => {
+    const onNavigate = (event) => {
+      if (!files.some(isDirty)) return;
+      event.preventDefault();
+      setLeaveTarget({ section: event.detail.section });
+      setLeaveConfirm(true);
+    };
+    window.addEventListener('buildx:navigate', onNavigate);
+    return () => window.removeEventListener('buildx:navigate', onNavigate);
+  }, [files]);
+  async function saveCopy(event) {
+    event.preventDefault();
+    if (!copyTarget || !copyPath.trim() || busy) return;
+    const parent = copyTarget.path.split('/').slice(0, -1).join('/');
+    const destination = joinPath(parent, copyPath.trim());
+    setBusy(true);
+    try {
+      await window.buildxDesktop.createWorkspaceFile(project.id, destination);
+      const empty = await window.buildxDesktop.readWorkspaceText(project.id, destination);
+      const saved = await window.buildxDesktop.writeWorkspaceText(project.id, destination, copyTarget.content, empty.revision);
+      const copied = { path: destination, content: copyTarget.content, originalContent: copyTarget.content, revision: saved.revision };
+      setFiles((current) => [...current, copied]);
+      setActiveFilePath(destination);
+      setSelected({ name: destination.split('/').at(-1), path: destination, type: 'file' });
+      setCopyTarget(null); setCopyPath(''); setEditorError('');
+      await loadDirectory(parent);
+    } catch (copyError) {
+      setEditorError(copyError.message || 'The copy could not be saved. Your original edits are still available.');
+    } finally { setBusy(false); }
   }
   function flatten(pathName = '', depth = 0) {
     return (entriesByPath[pathName] || []).flatMap((entry) => [
@@ -140,6 +249,12 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder }) {
       if (dialog === 'move') {
         const destinationParent = target.split('/').slice(0, -1).join('/');
         if (destinationParent !== currentDir) await loadDirectory(destinationParent);
+        setFiles((current) => current.map((file) => file.path === selected.path || file.path.startsWith(`${selected.path}/`)
+          ? { ...file, path: `${target}${file.path.slice(selected.path.length)}` } : file));
+        if (activeFilePath === selected.path || activeFilePath?.startsWith(`${selected.path}/`)) {
+          setActiveFilePath(`${target}${activeFilePath.slice(selected.path.length)}`);
+        }
+        setSelected({ ...selected, path: target, name: target.split('/').at(-1) });
         setSelected(null);
       }
     } catch (operationError) { setError(operationError.message || 'The workspace operation failed.'); }
@@ -147,11 +262,19 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder }) {
   }
   async function deleteSelected() {
     if (!deleteTarget || busy) return;
+    const affectsFile = (file) => file.path === deleteTarget.path || (deleteTarget.type === 'directory' && file.path.startsWith(`${deleteTarget.path}/`));
+    if (files.some((file) => affectsFile(file) && isDirty(file))) {
+      setEditorError('Save or discard the unsaved file edits before deleting this item.');
+      setDeleteTarget(null);
+      return;
+    }
     setBusy(true); setError('');
     try {
       const parent = deleteTarget.path.split('/').slice(0, -1).join('/');
       await window.buildxDesktop.deleteWorkspaceItem(project.id, deleteTarget.path);
-      setDeleteTarget(null); setSelected(null); setPreview(null);
+      setDeleteTarget(null); setSelected(null);
+      setFiles((current) => current.filter((file) => !affectsFile(file)));
+      if (activeFilePath && affectsFile({ path: activeFilePath })) setActiveFilePath(null);
       await loadDirectory(parent);
     } catch (deleteError) { setError(deleteError.message || 'The item could not be deleted.'); setDeleteTarget(null); }
     finally { setBusy(false); }
@@ -159,15 +282,21 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder }) {
   const rows = flatten();
 
   return <section className="workspace-explorer" aria-label="Project workspace">
-    <div className="workspace-explorer-heading"><div><span className="eyebrow">PROJECT WORKSPACE</span><h1>{project.name}</h1><p className="workspace-root-path">{project.root_path}</p></div><div className="workspace-explorer-actions"><Button className="quiet-button" onClick={() => loadDirectory('', { initial: true })}>Refresh</Button><Button className="quiet-button" onClick={onChangeFolder}>Change folder</Button><Button className="quiet-button" onClick={onBack}>Back to project</Button></div></div>
+    <div className="workspace-explorer-heading"><div><span className="eyebrow">PROJECT WORKSPACE</span><h1>{project.name}</h1><p className="workspace-root-path">{project.root_path}</p></div><div className="workspace-explorer-actions"><Button className="quiet-button" onClick={() => loadDirectory('', { initial: true })}>Refresh</Button><Button className="quiet-button" onClick={onChangeFolder}>Change folder</Button><Button className="quiet-button" onClick={leaveWorkspace}>Back to project</Button></div></div>
     <div className="workspace-operation-bar"><Button className="primary-button" onClick={() => { setDialog('file'); setDialogValue(''); }}>New file</Button><Button className="quiet-button" onClick={() => { setDialog('folder'); setDialogValue(''); }}>New folder</Button>{selected && selected.type !== 'symlink' && <><Button className="quiet-button" onClick={() => { setDialog('move'); setDialogValue(selected.path); }}>Rename / move</Button><Button className="danger-button" onClick={() => setDeleteTarget(selected)}>Delete</Button></>}</div>
     {error && <div className="project-error" role="alert"><span>{error}</span><Button className="quiet-button" onClick={() => loadDirectory('')}>Retry</Button></div>}
     {loading ? <p role="status" className="project-state">Loading project files…</p> : <div className="workspace-browser-layout">
       <section className="file-tree-panel" aria-label="Project file tree"><div className="file-tree-heading"><strong>FILES</strong><span>Project root</span></div>{rows.length ? <ul className="file-tree">{rows.map((entry) => <li key={entry.path} style={{ '--tree-depth': entry.depth }}><button type="button" className={`file-tree-row ${selected?.path === entry.path ? 'selected' : ''} ${entry.type === 'symlink' ? 'blocked' : ''}`} onClick={() => entry.type === 'directory' ? toggleFolder(entry) : selectEntry(entry)} aria-label={`${entry.type === 'directory' ? expanded.has(entry.path) ? 'Collapse' : 'Expand' : 'Select'} ${entry.name}`}><span className="tree-disclosure">{entry.type === 'directory' ? expanded.has(entry.path) ? '⌄' : '›' : ' '}</span><span aria-hidden="true">{entry.type === 'directory' ? '▰' : entry.type === 'symlink' ? '↗' : '▤'}</span><span>{entry.name}</span>{entry.type === 'file' && <small>{entry.size} B</small>}</button></li>)}</ul> : <p className="project-state">This folder is empty.</p>}</section>
-      <section className="file-preview-panel" aria-label="File preview"><div className="file-preview-heading"><strong>{selected?.name || 'Preview'}</strong>{preview && <span>{preview.encoding} · {preview.size} bytes</span>}</div>{preview ? <pre className="file-preview-content">{preview.content}</pre> : <div className="file-preview-empty"><span aria-hidden="true">⌕</span><p>Select a text file to preview it.</p></div>}</section>
+      <section className="file-preview-panel editor-panel" aria-label="Code editor">
+        <div className="editor-tabs" role="tablist" aria-label="Open files">{files.map((file) => <div className={`editor-tab ${activeFilePath === file.path ? 'active' : ''}`} key={file.path}><button type="button" role="tab" aria-selected={activeFilePath === file.path} title={file.path} onClick={() => { setActiveFilePath(file.path); setSelected({ name: file.path.split('/').at(-1), path: file.path, type: 'file' }); setEditorError(''); }}>{file.path.split('/').at(-1)}{isDirty(file) && <span className="dirty-dot" aria-label="Unsaved changes">●</span>}</button><IconButton label={`Close ${file.path}`} onClick={() => closeFile(file.path)}>×</IconButton></div>)}</div>
+        {activeFile ? <><div className="editor-file-toolbar"><span title={activeFile.path}>{activeFile.path}</span><div><Button className="quiet-button" onClick={() => editorControlsRef.current?.find()}>Find</Button><Button className="primary-button" onClick={() => saveFile()} disabled={!isDirty(activeFile)}>{isDirty(activeFile) ? 'Save' : 'Saved'} <kbd>⌘S</kbd></Button></div></div>{editorError && <div className="editor-error" role="alert"><span>{editorError}</span><Button className="quiet-button" onClick={() => { setCopyTarget(activeFile); setCopyPath(`${activeFile.path.split('/').at(-1)}.copy`); }}>Save as copy</Button></div>}<div className="code-editor-wrap"><React.Suspense fallback={<p className="project-state" role="status">Loading editor…</p>}><CodeEditor key={activeFile.path} path={activeFile.path} value={activeFile.content} onChange={(content) => updateFileContent(activeFile.path, content)} onSave={() => saveFile(activeFile)} onState={setCursor} onReady={(controls) => { editorControlsRef.current = controls; }} /></React.Suspense></div><div className="editor-statusbar"><span>{languageNameForPath(activeFile.path)}</span><span>Ln {cursor.line}, Col {cursor.column}</span><span>{isDirty(activeFile) ? 'UNSAVED' : 'SAVED'}</span></div></> : <div className="file-preview-empty"><span aria-hidden="true">⌘</span><p>Open a text file to start editing.</p></div>}
+      </section>
     </div>}
     {dialog && <div className="modal-backdrop"><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="workspace-dialog-title"><div className="dialog-top"><span className="dialog-kicker">WORKSPACE ITEM</span><IconButton label="Close dialog" onClick={() => setDialog(null)}>×</IconButton></div><h2 id="workspace-dialog-title">{dialog === 'file' ? 'Create a file' : dialog === 'folder' ? 'Create a folder' : 'Rename or move'}</h2><p>{dialog === 'move' ? 'Enter a project-relative destination path. Existing items will not be overwritten.' : 'Enter a name for this new item in the current folder.'}</p><form onSubmit={submitDialog}><label htmlFor="workspace-item-path">{dialog === 'move' ? 'Destination path' : 'Name'}</label><TextInput id="workspace-item-path" label="Workspace item name" value={dialogValue} onChange={setDialogValue} placeholder={dialog === 'move' ? 'src/new-name.ts' : 'README.md'} maxLength={2048} /><div className="dialog-actions"><Button className="quiet-button" onClick={() => setDialog(null)} disabled={busy}>Cancel</Button><Button className="primary-button" type="submit" disabled={!dialogValue.trim() || busy}>{busy ? 'Working…' : 'Continue'}</Button></div></form></section></div>}
     {deleteTarget && <div className="modal-backdrop"><section className="dialog delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="workspace-delete-title"><div className="dialog-top"><span className="dialog-kicker">DELETE LOCAL ITEM</span><IconButton label="Cancel delete" onClick={() => setDeleteTarget(null)}>×</IconButton></div><h2 id="workspace-delete-title">Delete “{deleteTarget.name}”?</h2><p>This permanently deletes this item from the local project folder{deleteTarget.type === 'directory' ? ', including its contents' : ''}.</p><div className="dialog-actions"><Button className="quiet-button" onClick={() => setDeleteTarget(null)} disabled={busy}>Cancel</Button><Button className="danger-button" onClick={deleteSelected} disabled={busy}>{busy ? 'Deleting…' : 'Delete item'}</Button></div></section></div>}
+    {closeTarget && <div className="modal-backdrop"><section className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="close-tab-title"><div className="dialog-top"><span className="dialog-kicker">UNSAVED FILE</span></div><h2 id="close-tab-title">Save changes to {closeTarget.path.split('/').at(-1)}?</h2><p>This tab has unsaved changes. Save before closing, discard the edits, or keep the tab open.</p><div className="dialog-actions"><Button className="quiet-button" onClick={() => setCloseTarget(null)}>Cancel</Button><Button className="danger-button" onClick={() => closeFile(closeTarget.path, true)}>Discard</Button><Button className="primary-button" onClick={saveAndClose}>Save and close</Button></div></section></div>}
+    {leaveConfirm && <div className="modal-backdrop"><section className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="leave-workspace-title"><div className="dialog-top"><span className="dialog-kicker">UNSAVED WORKSPACE</span></div><h2 id="leave-workspace-title">Save your open file changes?</h2><p>Save all modified files before leaving this workspace, discard them, or stay here.</p><div className="dialog-actions"><Button className="quiet-button" onClick={() => { setLeaveConfirm(false); setLeaveTarget(null); }}>Stay</Button><Button className="danger-button" onClick={finishLeaving}>Discard changes</Button><Button className="primary-button" onClick={saveAndLeave}>Save all</Button></div></section></div>}
+    {copyTarget && <div className="modal-backdrop"><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="save-copy-title"><div className="dialog-top"><span className="dialog-kicker">RECOVER UNSAVED EDITS</span><IconButton label="Cancel save copy" onClick={() => setCopyTarget(null)}>×</IconButton></div><h2 id="save-copy-title">Save edits as a new file</h2><p>The original file changed outside BUILDX. Saving a copy preserves your unsaved version without overwriting the newer file.</p><form onSubmit={saveCopy}><label htmlFor="save-copy-path">New file name</label><TextInput id="save-copy-path" label="New file name" value={copyPath} onChange={setCopyPath} maxLength={255} /><div className="dialog-actions"><Button className="quiet-button" onClick={() => setCopyTarget(null)} disabled={busy}>Cancel</Button><Button className="primary-button" type="submit" disabled={!copyPath.trim() || busy}>{busy ? 'Saving…' : 'Save copy'}</Button></div></form></section></div>}
   </section>;
 }
 
@@ -329,6 +458,11 @@ function AppContent() {
     if (restoreFocus) window.setTimeout(() => menuTriggerRef.current?.focus?.(), 0);
   }
   function selectSection(id) {
+    if (id !== section) {
+      const request = new CustomEvent('buildx:navigate', { detail: { section: id }, cancelable: true });
+      window.dispatchEvent(request);
+      if (request.defaultPrevented) return;
+    }
     setSection(id);
     const label = sections.find((item) => item.id === id)?.label || 'Overview';
     setActiveTab(label);
@@ -455,7 +589,7 @@ function AppContent() {
           <div className="topbar-actions"><span className="runtime-label"><span className="status-dot" />{error ? 'Bridge offline' : appInfo ? 'Desktop ready' : 'Starting'}</span><Button className="quiet-button" onClick={() => notify('Projects are stored on this device.')}>Help <span aria-hidden="true">↗</span></Button></div>
         </header>
         <div className="tabbar">
-          <Tabs tabs={['Overview', ...(activeTab !== 'Overview' ? [activeTab] : [])]} activeTab={activeTab} onSelect={(tab) => { setActiveTab(tab); if (tab === 'Overview') setSection('home'); }} />
+          <Tabs tabs={['Overview', ...(activeTab !== 'Overview' ? [activeTab] : [])]} activeTab={activeTab} onSelect={(tab) => { if (tab === 'Overview') selectSection('home'); else setActiveTab(tab); }} />
           <button className="add-tab" aria-label="Open new workspace tab" onClick={() => { const tab = `View ${Date.now().toString().slice(-3)}`; setActiveTab(tab); notify('Temporary view opened.'); }}>+</button>
           <span className="tabbar-spacer" />
           <Button className="toolbar-action" onClick={(event) => openPalette(event.currentTarget)}><span aria-hidden="true">⌕</span> Quick switch <kbd>⌘ K</kbd></Button>
@@ -473,9 +607,9 @@ function AppContent() {
                 <div className="panel-bottom"><span>Everything begins here.</span><span>BUILDX / 01</span></div>
               </section>
               <div className="section-heading"><div><span className="eyebrow">A CLEAR START</span><h2>Make this space yours</h2></div><button className="text-button" onClick={() => { selectSection('projects'); }}>Browse workspace <span aria-hidden="true">→</span></button></div>
-              <div className="starter-row"><button type="button" className="starter-item" onClick={openDialog}><span className="starter-icon" aria-hidden="true">＋</span><span><strong>Create a project</strong><small>Keep project details together</small></span><span className="starter-arrow" aria-hidden="true">↗</span></button><button type="button" className="starter-item" onClick={(event) => openPalette(event.currentTarget)}><span className="starter-icon search-starter" aria-hidden="true">⌕</span><span><strong>Find your way around</strong><small>Search actions with Quick switch</small></span><span className="starter-arrow" aria-hidden="true">⌘K</span></button><div className="starter-item disabled-item"><span className="starter-icon" aria-hidden="true">◫</span><span><strong>Open a project folder</strong><small>Available in Phase 6</small></span><span className="later-label">LATER</span></div></div>
+              <div className="starter-row"><button type="button" className="starter-item" onClick={openDialog}><span className="starter-icon" aria-hidden="true">＋</span><span><strong>Create a project</strong><small>Keep project details together</small></span><span className="starter-arrow" aria-hidden="true">↗</span></button><button type="button" className="starter-item" onClick={(event) => openPalette(event.currentTarget)}><span className="starter-icon search-starter" aria-hidden="true">⌕</span><span><strong>Find your way around</strong><small>Search actions with Quick switch</small></span><span className="starter-arrow" aria-hidden="true">⌘K</span></button><button type="button" className="starter-item" onClick={() => selectSection('projects')}><span className="starter-icon" aria-hidden="true">◫</span><span><strong>Browse project files</strong><small>Choose a project folder and explore</small></span><span className="starter-arrow" aria-hidden="true">↗</span></button></div>
             </> : section === 'projects' ? workspaceProjectId && projects.find((item) => item.id === workspaceProjectId)?.root_path
-              ? <WorkspaceExplorer project={projects.find((item) => item.id === workspaceProjectId)} onBack={() => setWorkspaceProjectId(null)} onChangeFolder={() => chooseProjectDirectory(projects.find((item) => item.id === workspaceProjectId))} />
+              ? <WorkspaceExplorer project={projects.find((item) => item.id === workspaceProjectId)} onBack={() => setWorkspaceProjectId(null)} onNavigateSection={(id) => { setWorkspaceProjectId(null); setSection(id); setActiveTab(sections.find((item) => item.id === id)?.label || 'Overview'); }} onChangeFolder={() => chooseProjectDirectory(projects.find((item) => item.id === workspaceProjectId))} />
               : <ProjectManagementView projects={projects} selectedProject={activeProject} loading={projectsLoading} error={projectsError} onRetry={() => refreshProjects()} onCreate={(event) => openDialog(event)} onSelect={(id) => { setActiveProjectId(id); setWorkspaceProjectId(null); }} onEdit={(project) => openDialog(document.activeElement, 'edit', project)} onDelete={(project) => setDeleteTarget(project)} onChooseDirectory={chooseProjectDirectory} onOpenWorkspace={(project) => { setWorkspaceProjectId(project.id); setActiveProjectId(project.id); }} /> : <section className="empty-view"><div className="empty-icon">{sections.find((item) => item.id === section)?.icon}</div><span className="eyebrow">{sections.find((item) => item.id === section)?.label.toUpperCase()}</span><h1>{section === 'tasks' ? 'A little room for what’s next.' : 'Your setup, at your pace.'}</h1><p>{section === 'tasks' ? 'Task tracking is not connected yet. This space will take shape in a later phase.' : 'Desktop preferences will be available in a later phase.'}</p><span className="later-pill">NOT CONNECTED YET <span>·</span> LATER PHASE</span></section>}
           </div>
         </div>

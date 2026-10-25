@@ -298,6 +298,25 @@ button.starter-item:hover { background: rgba(255,255,255,.025); }
 .file-preview-empty { display: grid; min-height: 380px; place-content: center; justify-items: center; color: var(--muted); }
 .file-preview-empty > span { font-size: 32px; opacity: .55; }
 .file-preview-empty p { font-size: 13px; }
+.editor-panel { display: flex; min-height: 440px; flex-direction: column; }
+.editor-tabs { display: flex; min-width: 0; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.editor-tab { display: flex; min-width: 0; align-items: center; border-right: 1px solid var(--line); background: #151b16; }
+.editor-tab.active { background: #202820; box-shadow: inset 0 2px 0 var(--lime); }
+.editor-tab > button:first-child { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 10px 9px; border: 0; background: transparent; color: var(--muted); font: 11px var(--mono); cursor: pointer; }
+.editor-tab.active > button:first-child { color: var(--text); }
+.editor-tab .icon-button { width: 24px; height: 28px; margin-right: 3px; }
+.dirty-dot { color: var(--lime); font-size: 8px; }
+.editor-file-toolbar { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 10px; border-bottom: 1px solid var(--line); color: var(--muted); font: 10px var(--mono); }
+.editor-file-toolbar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-file-toolbar > div { display: flex; flex-shrink: 0; gap: 6px; }
+.editor-file-toolbar .button { min-height: 28px; padding: 0 8px; font-size: 10px; }
+.editor-file-toolbar kbd { margin-left: 5px; }
+.editor-error { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; border-bottom: 1px solid rgba(217, 137, 109, .25); color: #e5aa91; background: rgba(132, 58, 41, .13); font-size: 11px; }
+.editor-error .button { flex-shrink: 0; min-height: 26px; padding: 0 7px; font-size: 10px; }
+.code-editor-wrap { min-height: 0; flex: 1; overflow: hidden; }
+.code-editor-host, .code-editor-host .cm-editor { height: 100%; }
+.editor-statusbar { display: flex; min-height: 26px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; border-top: 1px solid var(--line); color: var(--muted); background: #151b16; font: 9px var(--mono); }
+.editor-statusbar span:last-child { color: var(--lime); }
 @media (max-width: 850px) {
   .workspace-explorer-heading { flex-direction: column; }
   .workspace-browser-layout { grid-template-columns: 1fr; }

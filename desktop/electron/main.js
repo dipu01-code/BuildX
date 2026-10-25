@@ -4,6 +4,7 @@ const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electro
 const { registerIpcHandlers } = require('./ipc.cjs');
 const { createProjectApi } = require('./project-api.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
+const { createWorkspaceFiles } = require('./workspace-files.cjs');
 const {
   createContentSecurityPolicy,
   isSafeExternalUrl,
@@ -26,6 +27,7 @@ function getBackendDirectory() {
 }
 
 const projectApi = createProjectApi({ getBaseUrl: () => backendBaseUrl });
+const workspaceFiles = createWorkspaceFiles();
 
 function isTrustedUrl(value) {
   return isTrustedRendererUrl(value, {
@@ -50,6 +52,18 @@ registerIpcHandlers({
     platform: process.platform,
   }),
   ...projectApi,
+  chooseProjectDirectory: (projectId) => workspaceFiles.chooseDirectory(
+    projectApi, projectId, dialog, BrowserWindow.getFocusedWindow(),
+  ),
+  listWorkspaceDirectory: (projectId, relativePath) => workspaceFiles.list(projectApi, projectId, relativePath),
+  readWorkspaceText: (projectId, relativePath) => workspaceFiles.readText(projectApi, projectId, relativePath),
+  writeWorkspaceText: (projectId, relativePath, content, revision) => workspaceFiles.writeText(
+    projectApi, projectId, relativePath, content, revision,
+  ),
+  createWorkspaceFile: (projectId, relativePath) => workspaceFiles.createFile(projectApi, projectId, relativePath),
+  createWorkspaceFolder: (projectId, relativePath) => workspaceFiles.createFolder(projectApi, projectId, relativePath),
+  moveWorkspaceItem: (projectId, fromPath, toPath) => workspaceFiles.move(projectApi, projectId, fromPath, toPath),
+  deleteWorkspaceItem: (projectId, relativePath) => workspaceFiles.remove(projectApi, projectId, relativePath),
 });
 
 function configureContentSecurityPolicy() {

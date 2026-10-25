@@ -10,6 +10,7 @@ const WORKSPACE_CHANNELS = Object.freeze({
   chooseDirectory: 'workspace:choose-directory',
   list: 'workspace:list',
   readText: 'workspace:read-text',
+  writeText: 'workspace:write-text',
   createFile: 'workspace:create-file',
   createFolder: 'workspace:create-folder',
   move: 'workspace:move',
@@ -56,7 +57,7 @@ function validateRelativePath(value, { allowEmpty = false } = {}) {
 function registerIpcHandlers({
   ipcMain, validateSender, getAppInfo,
   listProjects, getProject, createProject, updateProject, deleteProject,
-  chooseProjectDirectory, listWorkspaceDirectory, readWorkspaceText,
+  chooseProjectDirectory, listWorkspaceDirectory, readWorkspaceText, writeWorkspaceText,
   createWorkspaceFile, createWorkspaceFolder, moveWorkspaceItem, deleteWorkspaceItem,
 }) {
   ipcMain.handle(APP_INFO_CHANNEL, (event, ...args) => {
@@ -121,6 +122,17 @@ function registerIpcHandlers({
     if (args.length !== 2) throw new TypeError('workspace:read-text requires a project identifier and relative path.');
     validateProjectId(args[0]); validateRelativePath(args[1]);
     return readWorkspaceText(args[0], args[1]);
+  });
+
+  ipcMain.handle(WORKSPACE_CHANNELS.writeText, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 4) throw new TypeError('workspace:write-text requires project, path, content, and revision.');
+    validateProjectId(args[0]); validateRelativePath(args[1]);
+    if (typeof args[2] !== 'string' || args[2].length > 1024 * 1024
+      || typeof args[3] !== 'string' || !/^[0-9a-f]{64}$/.test(args[3])) {
+      throw new TypeError('The file content or save revision is invalid.');
+    }
+    return writeWorkspaceText(args[0], args[1], args[2], args[3]);
   });
 
   ipcMain.handle(WORKSPACE_CHANNELS.createFile, (event, ...args) => {
