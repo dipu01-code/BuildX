@@ -39,4 +39,4 @@ The development server URL is supplied only to the Electron main process through
 - **No desktop window appears:** run the app in a graphical desktop session; headless environments may run tests and build but cannot visually verify the window.
 - **The renderer bridge is unavailable:** open developer tools only during local development and inspect the Electron startup output for preload errors.
 
-No FastAPI server, database, AI provider, workspace filesystem access, or process runner is part of Phase 1.
+Phases 3–5 establish the FastAPI backend, SQLite persistence, and project CRUD API. Electron runs migrations and starts the backend on a loopback port; project requests cross a narrow preload IPC bridge. Project directory paths remain metadata only until Phase 6. AI-provider workflows and process execution are not enabled.

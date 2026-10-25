@@ -1,6 +1,9 @@
 const path = require('node:path');
+const fs = require('node:fs');
 const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electron');
 const { registerIpcHandlers } = require('./ipc.cjs');
+const { createProjectApi } = require('./project-api.cjs');
+const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const {
   createContentSecurityPolicy,
   isSafeExternalUrl,
@@ -13,6 +16,16 @@ const devServerUrl = process.env.BUILDX_DEV_SERVER_URL || '';
 const expectedDevUrl = normalizeDevServerUrl(devServerUrl);
 const expectedRendererPath = rendererFilePath(__dirname);
 let mainWindow;
+let backendProcess;
+let backendBaseUrl;
+
+function getBackendDirectory() {
+  if (process.env.BUILDX_BACKEND_DIR) return path.resolve(process.env.BUILDX_BACKEND_DIR);
+  if (app.isPackaged) return path.join(process.resourcesPath, 'backend');
+  return path.resolve(__dirname, '../../backend');
+}
+
+const projectApi = createProjectApi({ getBaseUrl: () => backendBaseUrl });
 
 function isTrustedUrl(value) {
   return isTrustedRendererUrl(value, {
@@ -36,6 +49,7 @@ registerIpcHandlers({
     version: app.getVersion(),
     platform: process.platform,
   }),
+  ...projectApi,
 });
 
 function configureContentSecurityPolicy() {
@@ -143,6 +157,22 @@ if (!hasSingleInstance) {
 
   app.whenReady().then(() => {
     configureContentSecurityPolicy();
+    const backendDir = getBackendDirectory();
+    if (fs.existsSync(backendDir)) {
+      const python = resolvePython(backendDir);
+      const pythonEnv = { ...process.env, BUILDX_PYTHON: python };
+      return runMigrations({ backendDir, dataDir: app.getPath('userData'), env: pythonEnv })
+        .then(() => startBackend({ backendDir, dataDir: app.getPath('userData'), env: pythonEnv }))
+        .then(({ child, baseUrl }) => {
+          backendProcess = child;
+          backendBaseUrl = baseUrl;
+        })
+        .catch((error) => {
+          console.error('BUILDX project service could not start:', error.message);
+        })
+        .finally(() => createMainWindow());
+    }
+    console.error('BUILDX backend directory is unavailable; project management will be offline.');
     createMainWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
@@ -151,5 +181,9 @@ if (!hasSingleInstance) {
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
+  });
+
+  app.on('before-quit', () => {
+    if (backendProcess && !backendProcess.killed) backendProcess.kill();
   });
 }

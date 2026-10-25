@@ -1,6 +1,6 @@
 # BUILDX backend
 
-The backend is a Python 3.10+ FastAPI service. Phase 4 adds SQLite persistence and Alembic migration infrastructure. The service does not start automatically with Electron and does not yet implement project, file, or AI workflows.
+The backend is a Python 3.10+ FastAPI service. Phase 4 added SQLite persistence and Alembic migration infrastructure. Phase 5 adds persistent project CRUD endpoints. Electron starts the local service and communicates with it through a narrow preload bridge; filesystem operations and AI workflows remain future phases.
 
 ## Setup and run
 
@@ -27,7 +27,7 @@ uv run pytest
 
 The default database is `buildx.db` in the OS-specific persistent user data directory: macOS `~/Library/Application Support/BUILDX`, Windows `%APPDATA%/BUILDX`, and Linux `$XDG_DATA_HOME/buildx` (default `~/.local/share/buildx`). Set `BUILDX_DATA_DIR` to override that directory; packaged Electron should pass `app.getPath('userData')` as this variable to the backend process. Alternatively, `BUILDX_DATABASE_URL` accepts a SQLite URL and takes precedence. Only SQLite URLs are supported. SQLite is not an encryption mechanism; use OS file permissions and future approved secret-storage design for sensitive data.
 
-The initial revision is intentionally empty because no domain schema was approved in Phase 0. It creates only Alembic's `alembic_version` tracking table. From `backend/`, initialize/apply migrations with:
+The initial revision is intentionally empty. Phase 5 adds the projects table in a separate migration. From `backend/`, apply migrations with:
 
 ```sh
 uv run alembic upgrade head
@@ -37,7 +37,7 @@ uv run alembic revision --autogenerate -m "describe schema change"
 
 Review every generated revision before applying it; migrations are the source of schema changes, not `Base.metadata.create_all()`. Run the isolated database suite with `uv run pytest tests/test_database.py`. Tests use pytest temporary directories and never touch the configured application data directory. They also apply the migration twice to a fresh temporary database. For a one-off test database, set `BUILDX_DATABASE_URL=sqlite:////absolute/path/to/test.db` or `BUILDX_DATA_DIR` to a disposable directory.
 
-SQLite is suitable for this single-user local-first foundation, but it serializes writes and is not a multi-process coordination or encryption layer. Backup/recovery policy, domain tables, concurrency strategy, and Electron process lifecycle remain future design work.
+SQLite is suitable for this single-user local-first foundation, but it serializes writes and is not a multi-process coordination or encryption layer. Backup/recovery policy, concurrency strategy, and Electron process lifecycle remain future design work.
 
 ## Configuration
 
@@ -74,4 +74,18 @@ Errors use one JSON envelope. Validation failures return HTTP 422 and include sa
 
 ## Electron communication contract
 
-There is no backend communication contract in the current Electron application, so Phase 3 does not modify the main process or renderer bridge. When backend process management is approved, Electron's main process should select an available loopback port, pass it as `BUILDX_PORT` (or use port `0` and read the backend's structured startup line), and own the HTTP client boundary. The sandboxed renderer should continue to communicate through narrowly scoped preload IPC rather than receive unrestricted Node.js, shell, or direct backend access. CORS remains disabled because no browser-origin API requests are currently required. Per-launch request authorization and packaged process lifecycle need an approved follow-up design before exposing API operations.
+Electron's main process applies Alembic migrations in the app's user data directory, launches the FastAPI service on an OS-assigned loopback port, and owns HTTP requests. The sandboxed renderer can call only the project operations exposed through preload IPC. Project `root_path` values are metadata only; Phase 5 does not inspect or modify the filesystem. A packaged build must include a compatible Python runtime and backend sources at `resources/backend` (or provide `BUILDX_BACKEND_DIR` during development).
+
+## Projects (Phase 5)
+
+The database-backed project endpoints are available under the configured API prefix (default `/api/v1`):
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/projects` | List projects, most recently updated first |
+| `POST` | `/projects` | Create a project (`name`, optional metadata) |
+| `GET` | `/projects/{project_id}` | Read one project |
+| `PATCH` | `/projects/{project_id}` | Update supplied project metadata |
+| `DELETE` | `/projects/{project_id}` | Delete the record only; local files remain untouched |
+
+Project names are trimmed and must contain a non-whitespace character. Names are limited to 120 characters, descriptions to 2,000, project types to 60, and root paths to 2,048. The API stores a root path but does not validate or access that path; secure directory handling belongs to Phase 6. Migrations run before the Electron-owned backend starts.

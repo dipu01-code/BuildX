@@ -70,15 +70,15 @@ def test_migrations_upgrade_fresh_database_twice(monkeypatch, tmp_path: Path) ->
             tables = connection.exec_driver_sql(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
             ).scalars().all()
-        assert revision == "0001_empty_schema"
-        assert set(tables) == {"alembic_version"}
+        assert revision == "0002_projects"
+        assert set(tables) == {"alembic_version", "projects"}
         engine.dispose()
     finally:
         get_settings.cache_clear()
 
 
-def test_model_metadata_is_registered_and_intentionally_empty() -> None:
-    assert Base.metadata.tables == {}
+def test_model_metadata_registers_project_table() -> None:
+    assert set(Base.metadata.tables) == {"projects"}
 
 
 def test_invalid_database_scheme_is_rejected() -> None:
