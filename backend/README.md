@@ -123,3 +123,29 @@ Example successful connection test:
 ## Project planning (Phase 9)
 
 Project plans are generated through the Phase 8 provider adapter, returned as unsaved drafts, and validated with bounded Pydantic schemas before reaching Electron. `POST /projects/{project_id}/plans/generate` sends only the project brief and optional planning preferences; generation does not persist a plan. `POST`, `GET`, `PATCH`, and `DELETE` at `/projects/{project_id}/plans` manage approved plan records. Plan JSON is associated with the project by a cascading foreign key in migration `0003_project_plans`; plan deletion never touches project files. Provider output and saved edits must have valid dependency references and an acyclic task dependency graph.
+
+## Project context indexing (Phase 10)
+
+The Electron main process discovers files only after the project directory has been confirmed with the native folder picker for the current app run. It walks the canonical root, skips symbolic links, reads one file at a time, and sends bounded batches to the loopback API. API clients cannot supply a filesystem root; the backend stores the relative path and text received from the desktop workflow.
+
+Root and nested `.gitignore` files are applied with the pinned `ignore` package, including negation. The scanner skips `.git`, dependencies and generated folders (`node_modules`, virtual environments, `dist`, `build`, caches, and similar), sensitive file/directory names (`.env*`, credentials, keys, `.ssh`, `.aws`, and similar), likely private-key/credential content, symlinks, binary files, and invalid UTF-8. Permission and changing-file errors are reported without logging text or absolute paths. If `.gitignore` cannot be read safely, the scan is marked incomplete and unseen indexed records are retained.
+
+Limits are 1 MiB per file, 25 MiB of indexed text, 5,000 files, and 20,000 filesystem entries. Files are normalized to LF and split deterministically into chunks no larger than 1,400 characters with 180-character overlap, preferring line boundaries. SHA-256 hashes avoid rewriting unchanged chunks. Text and metadata stay in the local SQLite database; source content is never sent to an AI provider.
+
+Retrieval is deterministic local keyword search: case-insensitive word matching requires every meaningful query term to be present, then ranks by term frequency, phrase match, and path matches. Results include a relative path, source line range, score, and excerpt capped at 600 characters. This is lexical retrieval, not semantic or vector search; it scans the bounded project chunk set in the local backend.
+
+Context endpoints (default API prefix `/api/v1`):
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/projects/{project_id}/context/index/refresh` | Start one refresh; duplicate active jobs return 409 |
+| `PUT` | `/projects/{project_id}/context/index/files` | Persist a bounded batch of file text or unchanged metadata |
+| `PATCH` | `/projects/{project_id}/context/index/progress` | Save discovery counts and safe error summaries |
+| `POST` | `/projects/{project_id}/context/index/complete` | Remove stale/excluded files and finalize status |
+| `POST` | `/projects/{project_id}/context/index/fail` | Mark an interrupted refresh without deleting prior records |
+| `GET` | `/projects/{project_id}/context/status` | Read current state, counts, skip reasons, and errors |
+| `GET` | `/projects/{project_id}/context/files` | Paginate indexed file metadata |
+| `GET` | `/projects/{project_id}/context/files/chunks?relative_path=...` | Read stored chunks for one relative path |
+| `GET` | `/projects/{project_id}/context/search?q=...&limit=...` | Search local chunks for the selected project |
+
+Migration `0004_project_context` adds indexed-file, chunk, and latest-job tables with cascading project/file foreign keys. Run focused tests with `uv run pytest tests/test_context.py` and migration checks with `uv run pytest tests/test_database.py`; run the full backend suite with `uv run pytest`.

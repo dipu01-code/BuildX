@@ -23,4 +23,8 @@ contextBridge.exposeInMainWorld('buildxDesktop', Object.freeze({
   createWorkspaceFolder: (projectId, relativePath) => ipcRenderer.invoke('workspace:create-folder', projectId, relativePath),
   moveWorkspaceItem: (projectId, fromPath, toPath) => ipcRenderer.invoke('workspace:move', projectId, fromPath, toPath),
   deleteWorkspaceItem: (projectId, relativePath) => ipcRenderer.invoke('workspace:delete', projectId, relativePath),
+  refreshProjectIndex: (projectId) => ipcRenderer.invoke('context:index-refresh', projectId),
+  getProjectIndexStatus: (projectId) => ipcRenderer.invoke('context:index-status', projectId),
+  listProjectIndexedFiles: (projectId) => ipcRenderer.invoke('context:index-files', projectId),
+  searchProjectContext: (projectId, query, limit = 8) => ipcRenderer.invoke('context:search', projectId, query, limit),
 }));

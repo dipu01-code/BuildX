@@ -15,9 +15,11 @@ const editorTheme = EditorView.theme({
   '&.cm-focused': { outline: 'none' },
 });
 
-export default function CodeEditor({ path, value, onChange, onSave, onState, onReady }) {
+export default function CodeEditor({ path, value, onChange, onSave, onState, onReady, initialLine = 1 }) {
   const hostRef = useRef(null);
   const viewRef = useRef(null);
+  const initialLineRef = useRef(initialLine);
+  initialLineRef.current = initialLine;
   const [language, setLanguage] = useState(null);
   const callbacksRef = useRef({ onChange, onSave, onState });
   callbacksRef.current = { onChange, onSave, onState };
@@ -54,7 +56,14 @@ export default function CodeEditor({ path, value, onChange, onSave, onState, onR
       parent: hostRef.current,
     });
     viewRef.current = view;
-    onReady?.({ find: () => openSearchPanel(view), focus: () => view.focus() });
+    function goToLine(number) {
+      const target = Math.min(Math.max(1, Number.isInteger(number) ? number : 1), view.state.doc.lines);
+      const line = view.state.doc.line(target);
+      if (target === 1) return;
+      view.dispatch({ selection: { anchor: line.from }, effects: EditorView.scrollIntoView(line.from, { y: 'center' }) });
+    }
+    onReady?.({ find: () => openSearchPanel(view), focus: () => view.focus(), goToLine });
+    goToLine(initialLineRef.current);
     view.focus();
     const line = view.state.doc.lineAt(view.state.selection.main.head);
     callbacksRef.current.onState({ line: line.number, column: view.state.selection.main.head - line.from + 1 });

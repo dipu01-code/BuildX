@@ -20,6 +20,7 @@ describe('preload desktop API', () => {
       'getAppInfo', 'getAIStatus', 'testAIConnection', 'generateProjectPlan', 'listProjectPlans', 'getProjectPlan', 'saveProjectPlan', 'updateProjectPlan', 'deleteProjectPlan', 'listProjects', 'getProject', 'createProject', 'updateProject', 'deleteProject',
       'chooseProjectDirectory', 'listWorkspaceDirectory', 'readWorkspaceText', 'writeWorkspaceText',
       'createWorkspaceFile', 'createWorkspaceFolder', 'moveWorkspaceItem', 'deleteWorkspaceItem',
+      'refreshProjectIndex', 'getProjectIndexStatus', 'listProjectIndexedFiles', 'searchProjectContext',
     ]);
     await api.getAppInfo();
     expect(invoke).toHaveBeenCalledExactlyOnceWith('app:get-info');

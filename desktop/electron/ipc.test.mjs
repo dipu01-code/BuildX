@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { AI_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
+const { AI_CHANNELS, CONTEXT_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
 const APP_INFO_CHANNEL = 'app:get-info';
 
 function makeIpc() {
@@ -14,6 +14,28 @@ function makeIpc() {
 }
 
 describe('privileged IPC validation', () => {
+  it('exposes only project-scoped context refresh, status, and search actions', async () => {
+    const { ipcMain, handlers } = makeIpc();
+    const refreshProjectIndex = vi.fn().mockResolvedValue({ accepted: true });
+    const getProjectIndexStatus = vi.fn().mockResolvedValue({ state: 'up_to_date' });
+    const searchProjectContext = vi.fn().mockResolvedValue({ results: [] });
+    registerIpcHandlers({
+      ipcMain, validateSender: vi.fn(), getAppInfo: vi.fn(),
+      refreshProjectIndex, getProjectIndexStatus, searchProjectContext,
+    });
+    const event = { senderFrame: { url: 'file:///app/index.html' } };
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+
+    await expect(handlers.get(CONTEXT_CHANNELS.refresh)(event, id)).resolves.toEqual({ accepted: true });
+    await expect(handlers.get(CONTEXT_CHANNELS.status)(event, id)).resolves.toEqual({ state: 'up_to_date' });
+    await expect(handlers.get(CONTEXT_CHANNELS.search)(event, id, 'router', 8)).resolves.toEqual({ results: [] });
+    expect(searchProjectContext).toHaveBeenCalledExactlyOnceWith(id, 'router', 8);
+    expect(() => handlers.get(CONTEXT_CHANNELS.search)(event, id, 'x', 8)).toThrow(/query/i);
+    expect(() => handlers.get(CONTEXT_CHANNELS.search)(event, id, 'router', 21)).toThrow(/limit/i);
+    expect(() => handlers.get(CONTEXT_CHANNELS.refresh)(event, '../outside')).toThrow(/identifier/i);
+    expect(refreshProjectIndex).toHaveBeenCalledExactlyOnceWith(id);
+  });
+
   it('validates sender and rejects arguments for AI status and test operations', async () => {
     const { ipcMain, handlers } = makeIpc();
     const getAIStatus = vi.fn(() => ({ provider_configured: false }));

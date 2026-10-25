@@ -20,6 +20,12 @@ const WORKSPACE_CHANNELS = Object.freeze({
   move: 'workspace:move',
   delete: 'workspace:delete',
 });
+const CONTEXT_CHANNELS = Object.freeze({
+  refresh: 'context:index-refresh',
+  status: 'context:index-status',
+  files: 'context:index-files',
+  search: 'context:search',
+});
 const PLANNER_CHANNELS = Object.freeze({
   generate: 'plans:generate', list: 'plans:list', get: 'plans:get', save: 'plans:save', update: 'plans:update', delete: 'plans:delete',
 });
@@ -66,6 +72,7 @@ function registerIpcHandlers({
   listProjects, getProject, createProject, updateProject, deleteProject,
   chooseProjectDirectory, listWorkspaceDirectory, readWorkspaceText, writeWorkspaceText,
   createWorkspaceFile, createWorkspaceFolder, moveWorkspaceItem, deleteWorkspaceItem,
+  refreshProjectIndex, getProjectIndexStatus, listProjectIndexedFiles, searchProjectContext,
   generatePlan, listPlans, getPlan, savePlan, updatePlan, deletePlan,
 }) {
   ipcMain.handle(APP_INFO_CHANNEL, (event, ...args) => {
@@ -199,6 +206,40 @@ function registerIpcHandlers({
     validateProjectId(args[0]); validateRelativePath(args[1]);
     return deleteWorkspaceItem(args[0], args[1]);
   });
+
+  ipcMain.handle(CONTEXT_CHANNELS.refresh, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 1) throw new TypeError('context:index-refresh requires one project identifier.');
+    validateProjectId(args[0]);
+    return refreshProjectIndex(args[0]);
+  });
+
+  ipcMain.handle(CONTEXT_CHANNELS.status, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 1) throw new TypeError('context:index-status requires one project identifier.');
+    validateProjectId(args[0]);
+    return getProjectIndexStatus(args[0]);
+  });
+
+  ipcMain.handle(CONTEXT_CHANNELS.files, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 1) throw new TypeError('context:index-files requires one project identifier.');
+    validateProjectId(args[0]);
+    return listProjectIndexedFiles(args[0]);
+  });
+
+  ipcMain.handle(CONTEXT_CHANNELS.search, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 3) throw new TypeError('context:search requires a project identifier, query, and limit.');
+    validateProjectId(args[0]);
+    if (typeof args[1] !== 'string' || args[1].trim().length < 2 || args[1].length > 300) {
+      throw new TypeError('Enter a search query between 2 and 300 characters.');
+    }
+    if (!Number.isInteger(args[2]) || args[2] < 1 || args[2] > 20) {
+      throw new TypeError('The context search result limit must be from 1 to 20.');
+    }
+    return searchProjectContext(args[0], args[1], args[2]);
+  });
 }
 
-module.exports = { AI_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };
+module.exports = { AI_CHANNELS, CONTEXT_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };

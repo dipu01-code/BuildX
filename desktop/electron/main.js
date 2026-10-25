@@ -5,6 +5,8 @@ const { registerIpcHandlers } = require('./ipc.cjs');
 const { createAIAPI } = require('./ai-api.cjs');
 const { createPlannerApi } = require('./planner-api.cjs');
 const { createProjectApi } = require('./project-api.cjs');
+const { createContextApi } = require('./context-api.cjs');
+const { createContextIndexer } = require('./context-indexer.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
 const {
@@ -32,6 +34,8 @@ const projectApi = createProjectApi({ getBaseUrl: () => backendBaseUrl });
 const aiApi = createAIAPI({ getBaseUrl: () => backendBaseUrl });
 const plannerApi = createPlannerApi({ getBaseUrl: () => backendBaseUrl });
 const workspaceFiles = createWorkspaceFiles();
+const contextApi = createContextApi({ getBaseUrl: () => backendBaseUrl });
+const contextIndexer = createContextIndexer({ workspaceFiles, projectApi, contextApi });
 
 function isTrustedUrl(value) {
   return isTrustedRendererUrl(value, {
@@ -58,6 +62,10 @@ registerIpcHandlers({
   ...projectApi,
   ...aiApi,
   ...plannerApi,
+  refreshProjectIndex: (projectId) => contextIndexer.refresh(projectId),
+  getProjectIndexStatus: (projectId) => contextApi.getIndexStatus(projectId),
+  listProjectIndexedFiles: (projectId) => contextApi.listIndexedFiles(projectId, { limit: 200 }),
+  searchProjectContext: (projectId, query, limit) => contextApi.searchProjectContext(projectId, query, limit),
   chooseProjectDirectory: (projectId) => workspaceFiles.chooseDirectory(
     projectApi, projectId, dialog, BrowserWindow.getFocusedWindow(),
   ),

@@ -1,10 +1,30 @@
 const fs = require('node:fs/promises');
 const crypto = require('node:crypto');
 const path = require('node:path');
+const fsConstants = require('node:fs').constants;
 const { TextDecoder } = require('node:util');
+const ignore = require('ignore');
 
 const MAX_TEXT_FILE_BYTES = 1024 * 1024;
 const MAX_DIRECTORY_ENTRIES = 5000;
+const MAX_INDEX_FILES = 5000;
+const MAX_INDEX_BYTES = 25 * 1024 * 1024;
+const MAX_IGNORE_FILE_BYTES = 256 * 1024;
+const GENERATED_DIRECTORIES = new Set([
+  '.git', 'node_modules', 'bower_components', 'vendor', 'dist', 'build', 'out', 'coverage',
+  '.next', '.nuxt', '.cache', '.turbo', '.parcel-cache', '.vite', '.venv', 'venv', 'env',
+  '.tox', '.mypy_cache', '.pytest_cache', '.ruff_cache', '__pycache__', 'target', '.idea',
+]);
+const SENSITIVE_DIRECTORIES = new Set(['.aws', '.ssh', 'secrets', 'credentials', 'certificates']);
+const SENSITIVE_FILE_PATTERNS = [
+  /^\.env(?:\..*)?$/i, /^\.npmrc$/i, /^\.pypirc$/i, /^\.netrc$/i, /^\.dockercfg$/i,
+  /^(?:credentials|secrets|auth)(?:\.[^.]+)?$/i, /^service-account.*\.json$/i,
+  /(?:^|[._-])(?:secret|credential|password|token)(?:[._-]|$)/i,
+  /\.(?:pem|key|p12|pfx|p7b|p7c|jks|keystore)$/i,
+  /^(?:id_rsa|id_dsa|id_ecdsa|id_ed25519)$/i,
+];
+const PRIVATE_KEY_CONTENT = /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/i;
+const SECRET_ASSIGNMENT_CONTENT = /(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?(?:sk-[a-z0-9_-]{12,}|gh[pousr]_[a-z0-9]{12,}|AKIA[0-9A-Z]{16}|[a-z0-9/+_=-]{32,})/i;
 
 function controlledError(message, code = 'WORKSPACE_ERROR') {
   const error = new Error(message);
@@ -32,6 +52,17 @@ function parseRelativePath(value, { allowRoot = false } = {}) {
 function isWithin(root, candidate) {
   const relative = path.relative(root, candidate);
   return relative === '' || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`));
+}
+
+async function readBounded(handle, maximum) {
+  const buffer = Buffer.alloc(maximum + 1);
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+    if (bytesRead === 0) break;
+    offset += bytesRead;
+  }
+  return offset > maximum ? null : buffer.subarray(0, offset);
 }
 
 function safeOperation(operation) {
@@ -292,6 +323,232 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
     return { canceled: false, project: updated };
   }
 
+  async function readIgnoreMatcher(directory) {
+    const ignorePath = path.join(directory, '.gitignore');
+    let handle;
+    try {
+      const linkInfo = await fsImpl.lstat(ignorePath);
+      if (linkInfo.isSymbolicLink() || !linkInfo.isFile()) {
+        return { matcher: null, error: 'The .gitignore file is not a regular file.' };
+      }
+      if (linkInfo.size > MAX_IGNORE_FILE_BYTES) {
+        return { matcher: null, error: 'The .gitignore file exceeds the 256 KiB limit.' };
+      }
+      handle = await fsImpl.open(ignorePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW || 0));
+      const openedInfo = await handle.stat();
+      if (!openedInfo.isFile() || openedInfo.size > MAX_IGNORE_FILE_BYTES
+        || openedInfo.ino !== linkInfo.ino || openedInfo.dev !== linkInfo.dev) {
+        return { matcher: null, error: 'The .gitignore file changed while it was being read.' };
+      }
+      const bytes = await readBounded(handle, MAX_IGNORE_FILE_BYTES);
+      if (!bytes) return { matcher: null, error: 'The .gitignore file exceeds the 256 KiB limit.' };
+      const source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      return { matcher: ignore().add(source), error: null };
+    } catch (error) {
+      if (error.code === 'ENOENT') return { matcher: null, error: null };
+      return { matcher: null, error: error instanceof TypeError
+        ? 'The .gitignore file is not valid UTF-8 text.'
+        : 'The .gitignore file could not be read.' };
+    } finally {
+      await handle?.close().catch(() => {});
+    }
+  }
+
+  function ignoredByRules(relativePath, ancestors, isDirectory) {
+    return ancestors.some(({ base, matcher }) => {
+      const localPath = base ? path.posix.relative(base, relativePath) : relativePath;
+      return localPath && matcher.ignores(isDirectory ? `${localPath}/` : localPath);
+    });
+  }
+
+  async function discoverIndexableFiles(projectApi, projectId, existingFiles = []) {
+    const root = await getRoot(projectApi, projectId);
+    const knownFiles = new Map(existingFiles.map((file) => [file.relative_path, file]));
+    const counters = {
+      discoveredCount: 0, processedCount: 0, skippedCount: 0, totalBytes: 0,
+      skipReasons: {}, errors: [], preservePaths: [], incomplete: false,
+    };
+
+    function skip(reason, relativePath, message = null, incomplete = false, retainPrior = false) {
+      counters.skippedCount += 1;
+      counters.skipReasons[reason] = (counters.skipReasons[reason] || 0) + 1;
+      if (message && counters.errors.length < 100) {
+        counters.errors.push({ path: relativePath || '', message });
+      }
+      if (incomplete) counters.incomplete = true;
+      if (retainPrior && relativePath && counters.preservePaths.length < MAX_INDEX_FILES) {
+        counters.preservePaths.push(relativePath);
+      }
+      return { type: 'skip', reason, path: relativePath || '' };
+    }
+
+    const iterate = async function* iterate() {
+      const stack = [{ absolute: root, relative: '', ancestors: [] }];
+      let visitedEntries = 0;
+      let reachedLimit = false;
+      while (stack.length && !reachedLimit) {
+        const directory = stack.pop();
+        let ancestors = directory.ancestors;
+        const localIgnore = await readIgnoreMatcher(directory.absolute);
+        if (localIgnore.error) yield skip('ignore_file_error', directory.relative, localIgnore.error, true);
+        if (localIgnore.matcher) ancestors = [...ancestors, { base: directory.relative, matcher: localIgnore.matcher }];
+
+        let handle;
+        try {
+          handle = await fsImpl.opendir(directory.absolute);
+          const entries = [];
+          for await (const entry of handle) {
+            entries.push(entry);
+            visitedEntries += 1;
+            if (visitedEntries > MAX_INDEX_FILES * 4) {
+              yield skip('entry_limit', directory.relative, 'The project exceeds the 20,000-entry indexing limit.', true);
+              reachedLimit = true;
+              break;
+            }
+          }
+          entries.sort((left, right) => left.name.localeCompare(right.name));
+          const children = [];
+          for (const entry of entries) {
+            if (reachedLimit) break;
+            const relativePath = directory.relative ? `${directory.relative}/${entry.name}` : entry.name;
+            if (entry.name.includes('\\') || entry.name.includes(':') || entry.name === '.' || entry.name === '..') {
+              yield skip('invalid_path', relativePath);
+              continue;
+            }
+            let info;
+            try { info = await fsImpl.lstat(path.join(directory.absolute, entry.name)); }
+            catch (error) {
+              yield skip('unreadable', relativePath, error.code === 'ENOENT'
+                ? 'The file disappeared during indexing.' : 'The file could not be inspected.', false, error.code !== 'ENOENT');
+              continue;
+            }
+            if (info.isSymbolicLink()) {
+              yield skip('symlink', relativePath);
+              continue;
+            }
+            if (info.isDirectory()) {
+              if (SENSITIVE_DIRECTORIES.has(entry.name.toLowerCase())) {
+                yield skip('sensitive_directory', relativePath);
+                continue;
+              }
+              if (GENERATED_DIRECTORIES.has(entry.name.toLowerCase())) {
+                yield skip('generated_directory', relativePath);
+                continue;
+              }
+              if (ignoredByRules(relativePath, ancestors, true)) {
+                yield skip('gitignore', relativePath);
+                continue;
+              }
+              children.push({ absolute: path.join(directory.absolute, entry.name), relative: relativePath, ancestors });
+              continue;
+            }
+            if (!info.isFile()) {
+              yield skip('unsupported_file_type', relativePath);
+              continue;
+            }
+            counters.discoveredCount += 1;
+            if (counters.discoveredCount > MAX_INDEX_FILES) {
+              counters.discoveredCount = MAX_INDEX_FILES;
+              yield skip('file_limit', relativePath, 'The project exceeds the 5,000-file indexing limit.', true);
+              reachedLimit = true;
+              break;
+            }
+            if (ignoredByRules(relativePath, ancestors, false)) {
+              yield skip('gitignore', relativePath);
+              continue;
+            }
+            const filename = path.posix.basename(relativePath);
+            const sensitive = SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(filename));
+            if (sensitive) {
+              yield skip('sensitive_file', relativePath);
+              continue;
+            }
+            if (info.size > MAX_TEXT_FILE_BYTES) {
+              yield skip('file_too_large', relativePath, 'The file exceeds the 1 MiB per-file limit.');
+              continue;
+            }
+            if (counters.totalBytes + info.size > MAX_INDEX_BYTES) {
+              yield skip('project_size_limit', relativePath, 'The project exceeds the 25 MiB indexing limit.', true);
+              reachedLimit = true;
+              break;
+            }
+            let fileHandle;
+            try {
+              const { target } = await resolvePath(root, relativePath);
+              fileHandle = await fsImpl.open(target, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW || 0));
+              const openedInfo = await fileHandle.stat();
+              if (!openedInfo.isFile() || openedInfo.size > MAX_TEXT_FILE_BYTES
+                || openedInfo.ino !== info.ino || openedInfo.dev !== info.dev
+                || openedInfo.size !== info.size || openedInfo.mtimeMs !== info.mtimeMs) {
+                yield skip('file_changed', relativePath, 'The file changed while indexing; refresh to retry it.', false, true);
+                continue;
+              }
+              const bytes = await readBounded(fileHandle, MAX_TEXT_FILE_BYTES);
+              if (!bytes) {
+                yield skip('file_too_large', relativePath, 'The file grew beyond the 1 MiB per-file limit.');
+                continue;
+              }
+              const afterRead = await fileHandle.stat();
+              if (afterRead.ino !== openedInfo.ino || afterRead.size !== openedInfo.size
+                || afterRead.mtimeMs !== openedInfo.mtimeMs || bytes.length !== openedInfo.size) {
+                yield skip('file_changed', relativePath, 'The file changed while indexing; refresh to retry it.', false, true);
+                continue;
+              }
+              if (bytes.includes(0)) {
+                yield skip('binary_file', relativePath);
+                continue;
+              }
+              let content;
+              try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+              catch {
+                yield skip('invalid_text', relativePath, 'The file is not valid UTF-8 text.');
+                continue;
+              }
+              if (PRIVATE_KEY_CONTENT.test(content) || SECRET_ASSIGNMENT_CONTENT.test(content)) {
+                yield skip('sensitive_content', relativePath);
+                continue;
+              }
+              counters.totalBytes += bytes.length;
+              counters.processedCount += 1;
+              const contentHash = crypto.createHash('sha256').update(bytes).digest('hex');
+              const known = knownFiles.get(relativePath);
+              yield {
+                type: 'file',
+                file: {
+                  relative_path: relativePath,
+                  content_hash: contentHash,
+                  file_size: bytes.length,
+                  modified_at_ms: Math.max(0, Math.trunc(openedInfo.mtimeMs)),
+                  content: known?.content_hash === contentHash ? null : content,
+                },
+              };
+            } catch (error) {
+              const reason = error?.code === 'SYMLINK_BLOCKED' || error?.code === 'PATH_OUTSIDE_PROJECT'
+                ? 'symlink' : error?.code === 'ENOENT' ? 'file_changed' : 'unreadable';
+              yield skip(reason, relativePath, reason === 'file_changed'
+                ? 'The file disappeared while indexing.'
+                : 'The file could not be read. Check its permissions and refresh.', false,
+              reason === 'unreadable');
+            } finally {
+              await fileHandle?.close().catch(() => {});
+            }
+          }
+          // An explicit stack prevents deeply nested folders from exhausting the JS call stack.
+          stack.push(...children.reverse());
+        } catch {
+          yield skip('unreadable_directory', directory.relative, 'A project folder could not be read.', true);
+        } finally {
+          await handle?.close().catch(() => {});
+        }
+      }
+    };
+
+    return Object.freeze({ iterate, summary: () => ({
+      ...counters, skipReasons: { ...counters.skipReasons }, errors: [...counters.errors],
+      preservePaths: [...counters.preservePaths],
+    }) });
+  }
+
   return Object.freeze({
     list: safeOperation(list),
     readText: safeOperation(readText),
@@ -301,7 +558,10 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
     move: safeOperation(move),
     remove: safeOperation(remove),
     chooseDirectory: safeOperation(chooseDirectory),
+    discoverIndexableFiles: safeOperation(discoverIndexableFiles),
   });
 }
 
-module.exports = { MAX_TEXT_FILE_BYTES, createWorkspaceFiles, isWithin, parseRelativePath };
+module.exports = {
+  MAX_TEXT_FILE_BYTES, MAX_INDEX_FILES, MAX_INDEX_BYTES, createWorkspaceFiles, isWithin, parseRelativePath,
+};

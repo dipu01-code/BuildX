@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.config import Settings, get_settings
 from app.db.base import Base
+from app.db.models import Project
 from app.db.session import create_database_engine, create_session_factory, get_db
 
 
@@ -70,15 +71,46 @@ def test_migrations_upgrade_fresh_database_twice(monkeypatch, tmp_path: Path) ->
             tables = connection.exec_driver_sql(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
             ).scalars().all()
-        assert revision == "0003_project_plans"
-        assert set(tables) == {"alembic_version", "projects", "project_plans"}
+        assert revision == "0004_project_context"
+        assert set(tables) == {
+            "alembic_version", "projects", "project_plans", "project_indexed_files",
+            "project_indexed_chunks", "project_index_jobs",
+        }
         engine.dispose()
     finally:
         get_settings.cache_clear()
 
 
-def test_model_metadata_registers_project_table() -> None:
-    assert set(Base.metadata.tables) == {"projects", "project_plans"}
+def test_model_metadata_registers_project_tables() -> None:
+    assert set(Base.metadata.tables) == {
+        "projects", "project_plans", "project_indexed_files", "project_indexed_chunks", "project_index_jobs",
+    }
+
+
+def test_phase_ten_migration_preserves_existing_project_rows(monkeypatch, tmp_path: Path) -> None:
+    database = tmp_path / "forward-migration.db"
+    monkeypatch.setenv("BUILDX_DATABASE_URL", f"sqlite:///{database}")
+    get_settings.cache_clear()
+    try:
+        config = Config("alembic.ini")
+        command.upgrade(config, "0003_project_plans")
+        engine = create_database_engine(Settings(database_url=f"sqlite:///{database}"))
+        factory = create_session_factory(engine)
+        project = Project(name="Existing project")
+        with factory.begin() as session:
+            session.add(project)
+        project_id = project.id
+        engine.dispose()
+
+        command.upgrade(config, "head")
+        engine = create_database_engine(Settings(database_url=f"sqlite:///{database}"))
+        with create_session_factory(engine)() as session:
+            persisted = session.get(Project, project_id)
+            assert persisted is not None
+            assert persisted.name == "Existing project"
+        engine.dispose()
+    finally:
+        get_settings.cache_clear()
 
 
 def test_invalid_database_scheme_is_rejected() -> None:
