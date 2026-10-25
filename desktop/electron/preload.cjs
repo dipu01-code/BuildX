@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('buildxDesktop', Object.freeze({
   getAppInfo: () => ipcRenderer.invoke('app:get-info'),
+  getAIStatus: () => ipcRenderer.invoke('ai:get-status'),
+  testAIConnection: () => ipcRenderer.invoke('ai:test-connection'),
   listProjects: () => ipcRenderer.invoke('projects:list'),
   getProject: (projectId) => ipcRenderer.invoke('projects:get', projectId),
   createProject: (project) => ipcRenderer.invoke('projects:create', project),

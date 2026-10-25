@@ -31,6 +31,9 @@ describe('BUILDX project management', () => {
     window.localStorage.clear();
     window.buildxDesktop = {
       getAppInfo: vi.fn().mockResolvedValue({ name: 'BUILDX', version: '0.1.0', platform: 'darwin' }),
+      getAIStatus: vi.fn().mockResolvedValue({ provider_configured: false, provider_id: 'openai',
+        model_id: 'gpt-5.4-mini', credential_available: false, connection_status: 'missing_credentials' }),
+      testAIConnection: vi.fn(),
       listProjects: vi.fn().mockResolvedValue([]),
       getProject: vi.fn(),
       createProject: vi.fn(),
@@ -83,6 +86,14 @@ describe('BUILDX project management', () => {
     delete window.buildxDesktop;
     render(<App />);
     expect(await screen.findByText('Bridge offline')).toBeInTheDocument();
+  });
+
+  it('opens the AI provider configuration in Settings', async () => {
+    render(<App />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+    expect(await screen.findByRole('heading', { name: 'AI provider' })).toBeInTheDocument();
+    expect(await screen.findByText(/stays on the backend/i)).toBeInTheDocument();
+    expect(window.buildxDesktop.getAIStatus).toHaveBeenCalledOnce();
   });
 
   it('opens a create form, validates the project name, and restores focus on Escape', async () => {

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,12 +29,22 @@ class Settings(BaseSettings):
     port: int = Field(default=0, ge=0, le=65535)
     data_dir: Path | None = None
     database_url: str | None = None
+    ai_provider: Literal["openai"] = "openai"
+    openai_api_key: SecretStr | None = Field(default=None, repr=False)
+    ai_model: str = Field(default="gpt-5.4-mini", min_length=1, max_length=128)
 
     @field_validator("api_prefix")
     @classmethod
     def validate_api_prefix(cls, value: str) -> str:
         if not value.startswith("/") or value == "/" or value.endswith("/"):
             raise ValueError("API prefix must start with / and have no trailing slash")
+        return value
+
+    @field_validator("ai_model")
+    @classmethod
+    def validate_ai_model(cls, value: str) -> str:
+        if not value.strip() or not all(character.isalnum() or character in "._:-" for character in value):
+            raise ValueError("AI model must be a provider model identifier")
         return value
 
     @field_validator("host")

@@ -1,4 +1,8 @@
 const APP_INFO_CHANNEL = 'app:get-info';
+const AI_CHANNELS = Object.freeze({
+  status: 'ai:get-status',
+  testConnection: 'ai:test-connection',
+});
 const PROJECT_CHANNELS = Object.freeze({
   list: 'projects:list',
   get: 'projects:get',
@@ -55,7 +59,7 @@ function validateRelativePath(value, { allowEmpty = false } = {}) {
 }
 
 function registerIpcHandlers({
-  ipcMain, validateSender, getAppInfo,
+  ipcMain, validateSender, getAppInfo, getAIStatus, testAIConnection,
   listProjects, getProject, createProject, updateProject, deleteProject,
   chooseProjectDirectory, listWorkspaceDirectory, readWorkspaceText, writeWorkspaceText,
   createWorkspaceFile, createWorkspaceFolder, moveWorkspaceItem, deleteWorkspaceItem,
@@ -66,6 +70,18 @@ function registerIpcHandlers({
       throw new TypeError('app:get-info does not accept arguments.');
     }
     return getAppInfo();
+  });
+
+  ipcMain.handle(AI_CHANNELS.status, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 0) throw new TypeError('ai:get-status does not accept arguments.');
+    return getAIStatus();
+  });
+
+  ipcMain.handle(AI_CHANNELS.testConnection, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 0) throw new TypeError('ai:test-connection does not accept arguments.');
+    return testAIConnection();
   });
 
   ipcMain.handle(PROJECT_CHANNELS.list, (event, ...args) => {
@@ -164,4 +180,4 @@ function registerIpcHandlers({
   });
 }
 
-module.exports = { PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };
+module.exports = { AI_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };

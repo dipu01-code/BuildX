@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
+const { AI_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
 const APP_INFO_CHANNEL = 'app:get-info';
 
 function makeIpc() {
@@ -14,6 +14,23 @@ function makeIpc() {
 }
 
 describe('privileged IPC validation', () => {
+  it('validates sender and rejects arguments for AI status and test operations', async () => {
+    const { ipcMain, handlers } = makeIpc();
+    const getAIStatus = vi.fn(() => ({ provider_configured: false }));
+    const testAIConnection = vi.fn(() => ({ success: false }));
+    registerIpcHandlers({ ipcMain, validateSender: vi.fn(), getAppInfo: vi.fn(),
+      getAIStatus, testAIConnection,
+      listProjects: vi.fn(), getProject: vi.fn(), createProject: vi.fn(), updateProject: vi.fn(), deleteProject: vi.fn() });
+    const event = { senderFrame: { url: 'file:///app/index.html' } };
+
+    expect(handlers.get(AI_CHANNELS.status)(event)).toEqual({ provider_configured: false });
+    expect(handlers.get(AI_CHANNELS.testConnection)(event)).toEqual({ success: false });
+    expect(getAIStatus).toHaveBeenCalledOnce();
+    expect(testAIConnection).toHaveBeenCalledOnce();
+    expect(() => handlers.get(AI_CHANNELS.status)(event, 'credential')).toThrow(/does not accept arguments/i);
+    expect(() => handlers.get(AI_CHANNELS.testConnection)(event, 'prompt')).toThrow(/does not accept arguments/i);
+  });
+
   it('validates sender and rejects unexpected arguments before returning app info', async () => {
     const { ipcMain, handlers } = makeIpc();
     const validateSender = vi.fn();

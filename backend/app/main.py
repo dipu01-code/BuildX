@@ -1,11 +1,15 @@
 """FastAPI application factory and safe error handlers."""
 
 import logging
+from contextlib import asynccontextmanager
 from http import HTTPStatus
+from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from app.ai.contracts import AIProvider
+from app.ai.openai_provider import OpenAIProvider
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes.router import api_router
@@ -15,11 +19,25 @@ from app.schemas.errors import ErrorBody, ErrorResponse, safe_validation_details
 logger = logging.getLogger("buildx.api")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, ai_provider: AIProvider | None = None) -> FastAPI:
     """Build an API instance with explicit configuration for tests and runtime."""
 
     configured = settings or get_settings()
     docs_enabled = configured.environment != "production"
+    credential = configured.openai_api_key.get_secret_value().strip() if configured.openai_api_key else ""
+    provider = ai_provider
+    if provider is None and credential:
+        provider = OpenAIProvider(api_key=credential, model_id=configured.ai_model)
+
+    @asynccontextmanager
+    async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            close = getattr(provider, "close", None)
+            if close is not None:
+                await close()
+
     application = FastAPI(
         title=configured.app_name,
         version=configured.app_version,
@@ -27,8 +45,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url="/docs" if docs_enabled else None,
         redoc_url="/redoc" if docs_enabled else None,
         openapi_url="/openapi.json" if docs_enabled else None,
+        lifespan=lifespan,
     )
     application.state.settings = configured
+    application.state.ai_provider = provider
     application.include_router(api_router, prefix=configured.api_prefix)
 
     @application.exception_handler(RequestValidationError)

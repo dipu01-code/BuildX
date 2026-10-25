@@ -1,7 +1,7 @@
 """Configuration validation coverage."""
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings
 
@@ -40,3 +40,25 @@ def test_settings_load_values_from_environment(monkeypatch: pytest.MonkeyPatch) 
 
     assert settings.host == "localhost"
     assert settings.port == 8765
+
+
+def test_ai_settings_load_the_backend_credential_and_keep_it_out_of_repr(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BUILDX_OPENAI_API_KEY", "sk-local-test")
+    monkeypatch.setenv("BUILDX_AI_MODEL", "gpt-5.4-mini")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.openai_api_key == SecretStr("sk-local-test")
+    assert settings.ai_model == "gpt-5.4-mini"
+    assert "sk-local-test" not in repr(settings)
+
+
+@pytest.mark.parametrize("model", ["", "https://example.com", "../secret", " model with spaces"])
+def test_ai_settings_reject_invalid_model_identifiers(model: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, ai_model=model)
+
+
+def test_ai_settings_reject_unimplemented_provider() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, ai_provider="other")

@@ -17,12 +17,16 @@ describe('preload desktop API', () => {
 
     expect(globalName).toBe('buildxDesktop');
     expect(Object.keys(api)).toEqual([
-      'getAppInfo', 'listProjects', 'getProject', 'createProject', 'updateProject', 'deleteProject',
+      'getAppInfo', 'getAIStatus', 'testAIConnection', 'listProjects', 'getProject', 'createProject', 'updateProject', 'deleteProject',
       'chooseProjectDirectory', 'listWorkspaceDirectory', 'readWorkspaceText', 'writeWorkspaceText',
       'createWorkspaceFile', 'createWorkspaceFolder', 'moveWorkspaceItem', 'deleteWorkspaceItem',
     ]);
     await api.getAppInfo();
     expect(invoke).toHaveBeenCalledExactlyOnceWith('app:get-info');
+    await api.getAIStatus();
+    await api.testAIConnection();
+    expect(invoke).toHaveBeenCalledWith('ai:get-status');
+    expect(invoke).toHaveBeenCalledWith('ai:test-connection');
     expect(api.send).toBeUndefined();
     expect(api.invoke).toBeUndefined();
     expect(api.readFile).toBeUndefined();

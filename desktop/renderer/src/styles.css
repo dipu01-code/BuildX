@@ -144,6 +144,27 @@ button.starter-item:hover { background: rgba(255,255,255,.025); }
 .empty-icon { width: 36px; height: 36px; display: grid; place-items: center; margin-bottom: 18px; border: 1px solid rgba(185,239,117,.2); border-radius: 7px; color: var(--lime); background: rgba(185,239,117,.06); font-size: 18px; }
 .empty-view h1 { margin: 10px 0; font-size: clamp(26px, 3vw, 36px); font-weight: 500; letter-spacing: -.055em; }
 .empty-view p { max-width: 380px; margin: 0; color: #929e94; font-size: 12px; line-height: 1.7; }
+.ai-settings { max-width: 720px; margin: 10px auto; }
+.ai-settings-heading { margin-bottom: 24px; }
+.ai-settings-heading h1 { margin: 7px 0; color: #e4e9e1; font-size: clamp(26px, 3vw, 36px); font-weight: 500; letter-spacing: -.055em; }
+.ai-settings-heading p, .ai-cost-note { max-width: 560px; color: #929e94; font-size: 12px; line-height: 1.7; }
+.ai-provider-card { padding: 20px; border: 1px solid var(--line-strong); border-radius: 9px; background: linear-gradient(130deg, #1b211c, #151a16); box-shadow: var(--shadow-panel); }
+.ai-provider-card-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.ai-provider-card-top h2 { margin: 7px 0 0; color: #e0e6dd; font-size: 17px; font-weight: 550; }
+.ai-status-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 3px; color: #aab6aa; font-size: 9px; letter-spacing: .08em; }
+.ai-status-pill.configured { border-color: rgba(185,239,117,.2); color: #c1d0b7; }
+.ai-status-pill.configured .status-dot { background: #b9ef75; }
+.ai-status-pill.unconfigured .status-dot { background: #d0a768; }
+.ai-provider-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.ai-provider-details div { min-width: 0; }
+.ai-provider-details dt { margin-bottom: 5px; color: #77837a; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.ai-provider-details dd { margin: 0; color: #d5ddd3; font-size: 11px; overflow-wrap: anywhere; }
+.ai-feedback, .ai-result-success, .ai-result-error { margin: 16px 0; color: #aab6aa; font-size: 11px; line-height: 1.7; }
+.ai-feedback code { color: #c8dbb5; }
+.ai-error, .ai-result-error { color: #e5a29c; }
+.ai-result-success { color: #c6dda9; }
+.ai-provider-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.ai-cost-note { margin-top: 13px; font-size: 10px; }
 .workspace-list-view { min-height: 100%; padding: 34px 0; }
 .workspace-list-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
 .workspace-list-heading h1 { margin: 8px 0 5px; font-size: clamp(28px, 3vw, 38px); font-weight: 500; letter-spacing: -.055em; }

@@ -1,6 +1,6 @@
 # BUILDX backend
 
-The backend is a Python 3.10+ FastAPI service. Phase 4 added SQLite persistence and Alembic migration infrastructure. Phase 5 adds persistent project CRUD endpoints. Electron starts the local service and communicates with it through a narrow preload bridge; filesystem operations and AI workflows remain future phases.
+The backend is a Python 3.10+ FastAPI service. Phase 4 added SQLite persistence and Alembic migration infrastructure. Phase 5 adds persistent project CRUD endpoints. Electron starts the local service and communicates with it through a narrow preload bridge; Phase 8 adds a backend-only OpenAI connection test without sending project data.
 
 ## Setup and run
 
@@ -53,6 +53,9 @@ Settings use the `BUILDX_` environment prefix. `.env` is read for local developm
 | `BUILDX_PORT` | `0` | Port; zero requests an OS-assigned available port |
 | `BUILDX_DATA_DIR` | OS-specific user data directory | Directory for persistent local application data; Electron should pass `app.getPath('userData')` |
 | `BUILDX_DATABASE_URL` | SQLite file under the data directory | Optional explicit SQLite database URL |
+| `BUILDX_AI_PROVIDER` | `openai` | The only provider implemented in Phase 8 |
+| `BUILDX_AI_MODEL` | `gpt-5.4-mini` | OpenAI Responses API model identifier |
+| `BUILDX_OPENAI_API_KEY` | unset | Optional OpenAI credential; backend only, never returned by the API |
 
 Invalid values fail settings validation instead of silently falling back.
 
@@ -93,3 +96,26 @@ Project names are trimmed and must contain a non-whitespace character. Names are
 ## Workspace files (Phase 6)
 
 Filesystem operations are owned by Electron's main process, not FastAPI. Electron obtains the stored root path and requires that the same canonical directory was confirmed through its native folder picker during the current app run; a path in the database alone is not authorization. Users confirm folders again after restarting BUILDX. The renderer has no direct filesystem or Node.js access. Symbolic links within project trees are shown as blocked entries and cannot be traversed. File previews accept UTF-8 text up to 1 MiB; they reject binary, invalid UTF-8, and oversized files. Path validation reduces traversal risks but does not claim to close every race with another local process mutating the same directory.
+
+## AI provider connection (Phase 8)
+
+The only implemented provider is OpenAI through its official Python SDK and Responses API. For local setup, run `cp .env.example .env` from `backend/`, add your key to `BUILDX_OPENAI_API_KEY`, and restart BUILDX. Keep the key out of source control. The renderer never reads or submits the key. `BUILDX_AI_MODEL` selects a validated model identifier and defaults to `gpt-5.4-mini`; there is no user-controlled API endpoint.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/ai/status` | Return provider, model, credential-available boolean, and `not_tested` or `missing_credentials`; this does not test reachability |
+| `POST` | `/ai/test-connection` | Send one fixed, short request with a bounded timeout; sends no project data and stores no response |
+
+An unconfigured status is returned without failing backend startup. Test failures use stable categories (`configuration_error`, `authentication_error`, `rate_limited`, `timeout`, `network_error`, `malformed_response`, and `provider_error`) with sanitized messages. The test request disables provider response storage, is not persisted locally, and may incur a small API charge when credentials are configured. Automated tests use fake providers and never call the real API.
+
+Example unconfigured status:
+
+```json
+{"provider_configured":false,"provider_id":"openai","model_id":"gpt-5.4-mini","credential_available":false,"connection_status":"missing_credentials"}
+```
+
+Example successful connection test:
+
+```json
+{"success":true,"provider_id":"openai","model_id":"gpt-5.4-mini","response_text":"BUILDX connection verified.","duration_ms":142,"error_category":null,"message":null}
+```
