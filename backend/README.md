@@ -89,3 +89,7 @@ The database-backed project endpoints are available under the configured API pre
 | `DELETE` | `/projects/{project_id}` | Delete the record only; local files remain untouched |
 
 Project names are trimmed and must contain a non-whitespace character. Names are limited to 120 characters, descriptions to 2,000, project types to 60, and root paths to 2,048. The API stores a root path but does not validate or access that path; secure directory handling belongs to Phase 6. Migrations run before the Electron-owned backend starts.
+
+## Workspace files (Phase 6)
+
+Filesystem operations are owned by Electron's main process, not FastAPI. Electron obtains the root path from the persisted project record and checks project-relative paths before each operation. The renderer has no direct filesystem or Node.js access. Symbolic links within project trees are shown as blocked entries and cannot be traversed. File previews accept UTF-8 text up to 1 MiB; they reject binary, invalid UTF-8, and oversized files. Path validation reduces traversal risks but does not claim to close every race with another local process mutating the same directory.

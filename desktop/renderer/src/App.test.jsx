@@ -30,6 +30,13 @@ describe('BUILDX project management', () => {
       createProject: vi.fn(),
       updateProject: vi.fn(),
       deleteProject: vi.fn(),
+      chooseProjectDirectory: vi.fn(),
+      listWorkspaceDirectory: vi.fn().mockResolvedValue({ path: '', entries: [] }),
+      readWorkspaceText: vi.fn(),
+      createWorkspaceFile: vi.fn(),
+      createWorkspaceFolder: vi.fn(),
+      moveWorkspaceItem: vi.fn(),
+      deleteWorkspaceItem: vi.fn(),
     };
   });
 
@@ -165,6 +172,37 @@ describe('BUILDX project management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete project' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Delete failed');
     expect(screen.getByText('Atlas')).toBeInTheDocument();
+  });
+
+  it('opens an associated project folder and previews text through the desktop bridge', async () => {
+    const existing = project({ root_path: '/tmp/buildx-fixture' });
+    window.buildxDesktop.listProjects.mockResolvedValue([existing]);
+    window.buildxDesktop.listWorkspaceDirectory.mockResolvedValue({ path: '', entries: [
+      { name: 'README.md', path: 'README.md', type: 'file', size: 12 },
+    ] });
+    window.buildxDesktop.readWorkspaceText.mockResolvedValue({ path: 'README.md', content: 'Hello workspace', size: 15, encoding: 'utf-8' });
+    render(<App />);
+    openProjects();
+    fireEvent.click(await screen.findByText('Atlas'));
+    fireEvent.click(screen.getByRole('button', { name: /open workspace/i }));
+    expect(await screen.findByText('/tmp/buildx-fixture')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Select README.md' }));
+    expect(await screen.findByText('Hello workspace')).toBeInTheDocument();
+    expect(window.buildxDesktop.readWorkspaceText).toHaveBeenCalledWith(existing.id, 'README.md');
+  });
+
+  it('associates a folder only after the native picker confirms a selection', async () => {
+    const existing = project();
+    window.buildxDesktop.listProjects.mockResolvedValue([existing]);
+    window.buildxDesktop.chooseProjectDirectory.mockResolvedValueOnce({ canceled: true })
+      .mockResolvedValueOnce({ canceled: false, project: project({ root_path: '/tmp/selected-project' }) });
+    render(<App />);
+    openProjects();
+    fireEvent.click(await screen.findByText('Atlas'));
+    fireEvent.click(screen.getByRole('button', { name: /choose project folder/i }));
+    expect(await screen.findByText(/Not set. Choose a directory/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /choose project folder/i }));
+    expect(await screen.findByText('/tmp/selected-project')).toBeInTheDocument();
   });
 
   it('deletes a project after confirmation without deleting local files', async () => {

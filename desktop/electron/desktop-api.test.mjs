@@ -18,6 +18,8 @@ describe('preload desktop API', () => {
     expect(globalName).toBe('buildxDesktop');
     expect(Object.keys(api)).toEqual([
       'getAppInfo', 'listProjects', 'getProject', 'createProject', 'updateProject', 'deleteProject',
+      'chooseProjectDirectory', 'listWorkspaceDirectory', 'readWorkspaceText', 'createWorkspaceFile',
+      'createWorkspaceFolder', 'moveWorkspaceItem', 'deleteWorkspaceItem',
     ]);
     await api.getAppInfo();
     expect(invoke).toHaveBeenCalledExactlyOnceWith('app:get-info');

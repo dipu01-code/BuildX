@@ -40,3 +40,5 @@ The development server URL is supplied only to the Electron main process through
 - **The renderer bridge is unavailable:** open developer tools only during local development and inspect the Electron startup output for preload errors.
 
 Phases 3–5 establish the FastAPI backend, SQLite persistence, and project CRUD API. Electron runs migrations and starts the backend on a loopback port; project requests cross a narrow preload IPC bridge. Project directory paths remain metadata only until Phase 6. AI-provider workflows and process execution are not enabled.
+
+Phase 6 assigns project filesystem operations to Electron's main process. It resolves every requested relative path against the selected project's canonical root, rejects traversal and all descendant symlinks, and returns only operation-specific results through preload IPC. Text previews are limited to 1 MiB of valid UTF-8. Paths are revalidated for each operation, but Node's path-based APIs cannot eliminate all local time-of-check/time-of-use races against another process that can mutate the same directory.
