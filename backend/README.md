@@ -1,6 +1,6 @@
 # BUILDX backend
 
-The backend is a Python 3.10+ FastAPI service. Phase 4 added SQLite persistence and Alembic migration infrastructure. Phase 5 adds persistent project CRUD endpoints. Electron starts the local service and communicates with it through a narrow preload bridge; Phase 8 adds a backend-only OpenAI connection test without sending project data.
+The backend is a Python 3.10+ FastAPI service. It uses SQLite and Alembic for project and plan persistence. Electron starts the local service and communicates with it through a narrow preload bridge. The OpenAI adapter handles connection checks and schema-constrained planning without reading workspace files.
 
 ## Setup and run
 
@@ -119,3 +119,7 @@ Example successful connection test:
 ```json
 {"success":true,"provider_id":"openai","model_id":"gpt-5.4-mini","response_text":"BUILDX connection verified.","duration_ms":142,"error_category":null,"message":null}
 ```
+
+## Project planning (Phase 9)
+
+Project plans are generated through the Phase 8 provider adapter, returned as unsaved drafts, and validated with bounded Pydantic schemas before reaching Electron. `POST /projects/{project_id}/plans/generate` sends only the project brief and optional planning preferences; generation does not persist a plan. `POST`, `GET`, `PATCH`, and `DELETE` at `/projects/{project_id}/plans` manage approved plan records. Plan JSON is associated with the project by a cascading foreign key in migration `0003_project_plans`; plan deletion never touches project files. Provider output and saved edits must have valid dependency references and an acyclic task dependency graph.

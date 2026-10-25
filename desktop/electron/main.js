@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electron');
 const { registerIpcHandlers } = require('./ipc.cjs');
 const { createAIAPI } = require('./ai-api.cjs');
+const { createPlannerApi } = require('./planner-api.cjs');
 const { createProjectApi } = require('./project-api.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
@@ -29,6 +30,7 @@ function getBackendDirectory() {
 
 const projectApi = createProjectApi({ getBaseUrl: () => backendBaseUrl });
 const aiApi = createAIAPI({ getBaseUrl: () => backendBaseUrl });
+const plannerApi = createPlannerApi({ getBaseUrl: () => backendBaseUrl });
 const workspaceFiles = createWorkspaceFiles();
 
 function isTrustedUrl(value) {
@@ -55,6 +57,7 @@ registerIpcHandlers({
   }),
   ...projectApi,
   ...aiApi,
+  ...plannerApi,
   chooseProjectDirectory: (projectId) => workspaceFiles.chooseDirectory(
     projectApi, projectId, dialog, BrowserWindow.getFocusedWindow(),
   ),

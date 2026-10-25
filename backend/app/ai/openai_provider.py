@@ -20,6 +20,7 @@ from app.ai.contracts import (
     ConnectionTestRequest,
     NormalizedAIResponse,
     ProviderError,
+    StructuredGenerationRequest,
 )
 
 
@@ -80,6 +81,55 @@ class OpenAIProvider:
         if not isinstance(response_text, str) or not response_text.strip():
             raise ProviderError(AIErrorCategory.MALFORMED_RESPONSE)
 
+        return NormalizedAIResponse(
+            provider_id=self.provider_id,
+            model_id=self.model_id,
+            response_text=response_text.strip(),
+            duration_ms=max(0, round((monotonic() - started) * 1000)),
+        )
+
+    async def generate_structured(
+        self, request: StructuredGenerationRequest
+    ) -> NormalizedAIResponse:
+        """Use the Responses API JSON Schema mode; no SDK data escapes this adapter."""
+        started = monotonic()
+        try:
+            response = await self._client.responses.create(
+                model=self.model_id,
+                instructions=request.instruction,
+                input=request.user_content,
+                max_output_tokens=request.max_output_tokens,
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": request.schema_name,
+                        "strict": True,
+                        "schema": request.json_schema,
+                    }
+                },
+                store=False,
+                timeout=45.0,
+            )
+        except AuthenticationError as error:
+            raise ProviderError(AIErrorCategory.AUTHENTICATION_ERROR) from error
+        except PermissionDeniedError as error:
+            raise ProviderError(AIErrorCategory.AUTHENTICATION_ERROR) from error
+        except RateLimitError as error:
+            raise ProviderError(AIErrorCategory.RATE_LIMITED) from error
+        except APITimeoutError as error:
+            raise ProviderError(AIErrorCategory.TIMEOUT) from error
+        except APIConnectionError as error:
+            raise ProviderError(AIErrorCategory.NETWORK_ERROR) from error
+        except APIResponseValidationError as error:
+            raise ProviderError(AIErrorCategory.MALFORMED_RESPONSE) from error
+        except APIStatusError as error:
+            raise ProviderError(AIErrorCategory.PROVIDER_ERROR) from error
+        except Exception as error:
+            raise ProviderError(AIErrorCategory.PROVIDER_ERROR) from error
+
+        response_text = getattr(response, "output_text", None)
+        if not isinstance(response_text, str) or not response_text.strip():
+            raise ProviderError(AIErrorCategory.MALFORMED_RESPONSE)
         return NormalizedAIResponse(
             provider_id=self.provider_id,
             model_id=self.model_id,

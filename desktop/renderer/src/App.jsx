@@ -1,12 +1,14 @@
 import React, { Component, lazy, useEffect, useRef, useState } from 'react';
 import { languageNameForPath } from './editor-language-name.js';
 import AISettings from './AISettings.jsx';
+import ProjectPlanner from './ProjectPlanner.jsx';
 
 const CodeEditor = lazy(() => import('./CodeEditor.jsx'));
 
 const sections = [
   { id: 'home', label: 'Overview', icon: '⌂' },
   { id: 'projects', label: 'Projects', icon: '▤' },
+  { id: 'planner', label: 'Planner', icon: '✳' },
   { id: 'tasks', label: 'Tasks', icon: '☷' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ];
@@ -45,7 +47,7 @@ function Toast({ message, onDismiss }) {
 }
 
 function ProjectManagementView({
-  projects, selectedProject, loading, error, onRetry, onCreate, onSelect, onEdit, onDelete, onChooseDirectory, onOpenWorkspace,
+  projects, selectedProject, loading, error, onRetry, onCreate, onSelect, onEdit, onDelete, onChooseDirectory, onOpenWorkspace, onPlanProject,
 }) {
   return <section className="workspace-list-view" aria-labelledby="projects-title">
     <div className="workspace-list-heading">
@@ -61,7 +63,7 @@ function ProjectManagementView({
     {selectedProject && <article className="project-detail-card">
       <div className="project-detail-top"><span className="project-card-mark" aria-hidden="true">{selectedProject.name.slice(0, 1).toUpperCase()}</span><span className="project-card-meta"><strong>{selectedProject.project_type || 'Uncategorized project'}</strong><small>Updated {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(selectedProject.updated_at))}</small></span></div>
       <dl className="project-detail-list"><dt>Description</dt><dd>{selectedProject.description || 'No description added.'}</dd><dt>Project directory</dt><dd>{selectedProject.root_path || 'Not set. Choose a folder to browse project files.'}</dd></dl>
-      <div className="project-detail-actions"><Button className="primary-button" onClick={() => selectedProject.root_path ? onOpenWorkspace(selectedProject) : onChooseDirectory(selectedProject)}>{selectedProject.root_path ? 'Open workspace' : 'Choose project folder'} <span aria-hidden="true">↗</span></Button>{selectedProject.root_path && <Button className="quiet-button" onClick={() => onChooseDirectory(selectedProject)}>Change folder</Button>}<Button className="quiet-button" onClick={() => onEdit(selectedProject)}>Edit details</Button><Button className="danger-button" onClick={() => onDelete(selectedProject)}>Delete project</Button></div>
+      <div className="project-detail-actions"><Button className="primary-button" onClick={() => selectedProject.root_path ? onOpenWorkspace(selectedProject) : onChooseDirectory(selectedProject)}>{selectedProject.root_path ? 'Open workspace' : 'Choose project folder'} <span aria-hidden="true">↗</span></Button><Button className="quiet-button" onClick={() => onPlanProject(selectedProject)}>Plan project</Button>{selectedProject.root_path && <Button className="quiet-button" onClick={() => onChooseDirectory(selectedProject)}>Change folder</Button>}<Button className="quiet-button" onClick={() => onEdit(selectedProject)}>Edit details</Button><Button className="danger-button" onClick={() => onDelete(selectedProject)}>Delete project</Button></div>
       <p className="project-delete-note">Deleting a project removes only its BUILDX record; local files are left untouched.</p>
     </article>}
     {!selectedProject && !loading && !projects.length && !error && <div className="workspace-list-empty"><div className="empty-icon">▤</div><h2>No projects yet</h2><p>Create a project record to keep its description and directory association in BUILDX.</p><Button className="primary-button" onClick={onCreate}>Create a project <span aria-hidden="true">↗</span></Button></div>}
@@ -546,6 +548,7 @@ function AppContent() {
   function runCommand(command) {
     if (command === 'new') openDialog();
     if (command === 'projects') selectSection('projects');
+    if (command === 'planner') selectSection('planner');
     if (command === 'tasks') selectSection('tasks');
     if (command === 'settings') selectSection('settings');
     closePalette(false);
@@ -554,6 +557,7 @@ function AppContent() {
   const commands = [
     { id: 'new', label: 'Create a project', detail: 'Start a local project record', icon: '+' },
     { id: 'projects', label: 'Go to projects', detail: 'Browse your projects', icon: '▤' },
+    { id: 'planner', label: 'Open project planner', detail: 'Generate and review project plans', icon: '✳' },
     { id: 'tasks', label: 'Go to tasks', detail: 'See what is in progress', icon: '☷' },
     { id: 'settings', label: 'Open settings', detail: 'Configure BUILDX', icon: '⚙' },
   ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(query.toLowerCase()));
@@ -611,7 +615,9 @@ function AppContent() {
               <div className="starter-row"><button type="button" className="starter-item" onClick={openDialog}><span className="starter-icon" aria-hidden="true">＋</span><span><strong>Create a project</strong><small>Keep project details together</small></span><span className="starter-arrow" aria-hidden="true">↗</span></button><button type="button" className="starter-item" onClick={(event) => openPalette(event.currentTarget)}><span className="starter-icon search-starter" aria-hidden="true">⌕</span><span><strong>Find your way around</strong><small>Search actions with Quick switch</small></span><span className="starter-arrow" aria-hidden="true">⌘K</span></button><button type="button" className="starter-item" onClick={() => selectSection('projects')}><span className="starter-icon" aria-hidden="true">◫</span><span><strong>Browse project files</strong><small>Choose a project folder and explore</small></span><span className="starter-arrow" aria-hidden="true">↗</span></button></div>
             </> : section === 'projects' ? workspaceProjectId && projects.find((item) => item.id === workspaceProjectId)?.root_path
               ? <WorkspaceExplorer project={projects.find((item) => item.id === workspaceProjectId)} onBack={() => setWorkspaceProjectId(null)} onNavigateSection={(id) => { setWorkspaceProjectId(null); setSection(id); setActiveTab(sections.find((item) => item.id === id)?.label || 'Overview'); }} onChangeFolder={() => chooseProjectDirectory(projects.find((item) => item.id === workspaceProjectId))} />
-              : <ProjectManagementView projects={projects} selectedProject={activeProject} loading={projectsLoading} error={projectsError} onRetry={() => refreshProjects()} onCreate={(event) => openDialog(event)} onSelect={(id) => { setActiveProjectId(id); setWorkspaceProjectId(null); }} onEdit={(project) => openDialog(document.activeElement, 'edit', project)} onDelete={(project) => setDeleteTarget(project)} onChooseDirectory={chooseProjectDirectory} onOpenWorkspace={(project) => { setWorkspaceProjectId(project.id); setActiveProjectId(project.id); }} /> : section === 'settings' ? <AISettings /> : <section className="empty-view"><div className="empty-icon">{sections.find((item) => item.id === section)?.icon}</div><span className="eyebrow">{sections.find((item) => item.id === section)?.label.toUpperCase()}</span><h1>{section === 'tasks' ? 'A little room for what’s next.' : 'Your setup, at your pace.'}</h1><p>{section === 'tasks' ? 'Task tracking is not connected yet. This space will take shape in a later phase.' : 'Desktop preferences will be available in a later phase.'}</p><span className="later-pill">NOT CONNECTED YET <span>·</span> LATER PHASE</span></section>}
+              : <ProjectManagementView projects={projects} selectedProject={activeProject} loading={projectsLoading} error={projectsError} onRetry={() => refreshProjects()} onCreate={(event) => openDialog(event)} onSelect={(id) => { setActiveProjectId(id); setWorkspaceProjectId(null); }} onEdit={(project) => openDialog(document.activeElement, 'edit', project)} onDelete={(project) => setDeleteTarget(project)} onChooseDirectory={chooseProjectDirectory} onOpenWorkspace={(project) => { setWorkspaceProjectId(project.id); setActiveProjectId(project.id); }} onPlanProject={(project) => { setActiveProjectId(project.id); selectSection('planner'); }} />
+              : section === 'planner' ? <ProjectPlanner projects={projects} selectedProject={activeProject} onProjectChange={setActiveProjectId} />
+                : section === 'settings' ? <AISettings /> : <section className="empty-view"><div className="empty-icon">{sections.find((item) => item.id === section)?.icon}</div><span className="eyebrow">{sections.find((item) => item.id === section)?.label.toUpperCase()}</span><h1>{section === 'tasks' ? 'A little room for what’s next.' : 'Your setup, at your pace.'}</h1><p>{section === 'tasks' ? 'Task tracking is not connected yet. This space will take shape in a later phase.' : 'Desktop preferences will be available in a later phase.'}</p><span className="later-pill">NOT CONNECTED YET <span>·</span> LATER PHASE</span></section>}
           </div>
         </div>
         <footer className="statusbar"><div className="status-left"><span><i className="status-dot" />LOCAL ONLY</span><span className="status-divider" /><span>SECURE DESKTOP</span></div><div className="status-right"><span>{appInfo ? `BUILDX ${appInfo.version}` : 'BUILDX'}</span><span className="status-divider" /><span>EARLY ACCESS</span></div></footer>

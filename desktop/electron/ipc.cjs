@@ -20,6 +20,9 @@ const WORKSPACE_CHANNELS = Object.freeze({
   move: 'workspace:move',
   delete: 'workspace:delete',
 });
+const PLANNER_CHANNELS = Object.freeze({
+  generate: 'plans:generate', list: 'plans:list', get: 'plans:get', save: 'plans:save', update: 'plans:update', delete: 'plans:delete',
+});
 
 const PROJECT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PROJECT_FIELDS = new Set(['name', 'description', 'project_type']);
@@ -63,6 +66,7 @@ function registerIpcHandlers({
   listProjects, getProject, createProject, updateProject, deleteProject,
   chooseProjectDirectory, listWorkspaceDirectory, readWorkspaceText, writeWorkspaceText,
   createWorkspaceFile, createWorkspaceFolder, moveWorkspaceItem, deleteWorkspaceItem,
+  generatePlan, listPlans, getPlan, savePlan, updatePlan, deletePlan,
 }) {
   ipcMain.handle(APP_INFO_CHANNEL, (event, ...args) => {
     validateSender(event);
@@ -83,6 +87,23 @@ function registerIpcHandlers({
     if (args.length !== 0) throw new TypeError('ai:test-connection does not accept arguments.');
     return testAIConnection();
   });
+
+  for (const [channel, handler] of [
+    [PLANNER_CHANNELS.generate, generatePlan], [PLANNER_CHANNELS.list, listPlans],
+    [PLANNER_CHANNELS.get, getPlan], [PLANNER_CHANNELS.save, savePlan],
+    [PLANNER_CHANNELS.update, updatePlan], [PLANNER_CHANNELS.delete, deletePlan],
+  ]) {
+    ipcMain.handle(channel, (event, ...args) => {
+      validateSender(event);
+      const expectedArgs = channel === PLANNER_CHANNELS.generate || channel === PLANNER_CHANNELS.save ? 2
+        : channel === PLANNER_CHANNELS.update ? 3
+          : channel === PLANNER_CHANNELS.get || channel === PLANNER_CHANNELS.delete ? 2 : 1;
+      if (args.length !== expectedArgs) {
+        throw new TypeError('Invalid project planning request.');
+      }
+      return handler(...args);
+    });
+  }
 
   ipcMain.handle(PROJECT_CHANNELS.list, (event, ...args) => {
     validateSender(event);

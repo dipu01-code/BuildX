@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes.router import api_router
 from app.core.config import Settings, get_settings
-from app.schemas.errors import ErrorBody, ErrorResponse, safe_validation_details
+from app.schemas.errors import ErrorBody, ErrorResponse, PlannerAPIError, safe_validation_details
 
 logger = logging.getLogger("buildx.api")
 
@@ -76,6 +76,11 @@ def create_app(settings: Settings | None = None, ai_provider: AIProvider | None 
             content=payload.model_dump(mode="json"),
             headers=exc.headers,
         )
+
+    @application.exception_handler(PlannerAPIError)
+    async def planner_error_handler(_request: Request, exc: PlannerAPIError) -> JSONResponse:
+        payload = ErrorResponse(error=ErrorBody(code=exc.code, message=exc.message))
+        return JSONResponse(status_code=exc.status_code, content=payload.model_dump(mode="json"))
 
     @application.exception_handler(Exception)
     async def unexpected_error_handler(request: Request, _exc: Exception) -> JSONResponse:

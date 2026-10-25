@@ -29,6 +29,16 @@ class ErrorResponse(BaseModel):
     error: ErrorBody
 
 
+class PlannerAPIError(Exception):
+    """Actionable, sanitized planner failure using the shared error envelope."""
+
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+        super().__init__(code)
+
+
 def safe_validation_details(errors: list[dict[str, Any]]) -> list[ErrorDetail]:
     """Select non-sensitive fields from Pydantic's validation errors."""
 

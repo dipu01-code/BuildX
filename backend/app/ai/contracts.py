@@ -35,6 +35,16 @@ class NormalizedAIResponse(BaseModel):
     duration_ms: int
 
 
+class StructuredGenerationRequest(BaseModel):
+    """Bounded, provider-neutral request for a schema-constrained generation."""
+
+    instruction: str
+    user_content: str
+    schema_name: str
+    json_schema: dict[str, object]
+    max_output_tokens: int = 6000
+
+
 class ProviderError(Exception):
     """A safe normalized failure; never retain or expose the SDK exception text."""
 
@@ -51,6 +61,11 @@ class AIProvider(Protocol):
 
     async def test_connection(self, request: ConnectionTestRequest) -> NormalizedAIResponse:
         """Send the provider's smallest supported test request."""
+
+    async def generate_structured(
+        self, request: StructuredGenerationRequest
+    ) -> NormalizedAIResponse:
+        """Generate bounded JSON matching the supplied JSON Schema."""
 
 
 class AIProviderStatus(BaseModel):

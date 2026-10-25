@@ -125,6 +125,27 @@ def test_openai_adapter_normalizes_response_and_disables_provider_storage() -> N
     }]
 
 
+def test_openai_structured_generation_uses_schema_and_normalized_contract() -> None:
+    class FakeResponses:
+        calls: list[dict[str, object]] = []
+
+        async def create(self, **kwargs: object) -> SimpleNamespace:
+            self.calls.append(kwargs)
+            return SimpleNamespace(output_text='{"project_title":"Example"}')
+
+    responses = FakeResponses()
+    adapter = OpenAIProvider("sk-test", "gpt-test", client=SimpleNamespace(responses=responses))
+    result = asyncio.run(adapter.generate_structured(openai_provider.StructuredGenerationRequest(
+        instruction="Return JSON", user_content="brief", schema_name="plan", json_schema={"type": "object"}
+    )))
+    assert result.response_text == '{"project_title":"Example"}'
+    assert responses.calls[0]["store"] is False
+    assert responses.calls[0]["max_output_tokens"] == 6000
+    assert responses.calls[0]["text"] == {"format": {
+        "type": "json_schema", "name": "plan", "strict": True, "schema": {"type": "object"}
+    }}
+
+
 def test_openai_adapter_rejects_empty_provider_response() -> None:
     class FakeResponses:
         async def create(self, **_kwargs: object) -> SimpleNamespace:
