@@ -1,6 +1,6 @@
 # BUILDX backend
 
-The backend is a Python 3.10+ FastAPI service. It uses SQLite and Alembic for project and plan persistence. Electron starts the local service and communicates with it through a narrow preload bridge. The OpenAI adapter handles connection checks and schema-constrained planning without reading workspace files.
+The backend is a Python 3.10+ FastAPI service. It uses SQLite and Alembic for project, plan, context-index, and conversation persistence. Electron starts the local service and communicates with it through a narrow preload bridge. The OpenAI adapter handles connection checks, schema-constrained planning, and project coding-assistant responses; only assistant requests use bounded excerpts from the existing context index.
 
 ## Setup and run
 
@@ -149,3 +149,19 @@ Context endpoints (default API prefix `/api/v1`):
 | `GET` | `/projects/{project_id}/context/search?q=...&limit=...` | Search local chunks for the selected project |
 
 Migration `0004_project_context` adds indexed-file, chunk, and latest-job tables with cascading project/file foreign keys. Run focused tests with `uv run pytest tests/test_context.py` and migration checks with `uv run pytest tests/test_database.py`; run the full backend suite with `uv run pytest`.
+
+## Coding assistant conversations (Phase 11)
+
+Assistant requests are scoped to an existing project conversation. The route retrieves up to five lexical matches from that project's existing Phase 10 chunks (6,000 characters total), includes at most ten recent messages (12,000 characters), and calls the configured provider with a 1,600-token output limit. Project excerpts and history are supplied as untrusted data; the assistant is instructed not to follow source-file instructions or claim to have performed actions. Matching excerpts containing credential-like text are withheld, credential-like user messages are rejected before persistence, and credential-like generated output is withheld. The UI shows the exact relative file paths and lines supplied to the provider and explains that question/context text is sent to OpenAI. The provider call uses `store=False`.
+
+Migration `0005_project_conversations` adds project-owned conversation and message tables with cascading deletion, role/status constraints, request-idempotency indexes, and source references. Recent conversations and visible message history are local database data. Failed/interrupted turns can be retried using the same request identifier; a completed request replay returns the existing response. Generation is non-streaming and limited to two in-flight requests per backend process. The assistant cannot access the filesystem or execute commands.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/projects/{project_id}/conversations` | Create an empty project conversation |
+| `GET` | `/projects/{project_id}/conversations?limit=20` | List recent conversations |
+| `GET` | `/projects/{project_id}/conversations/{conversation_id}` | Read bounded message history and source references |
+| `DELETE` | `/projects/{project_id}/conversations/{conversation_id}` | Delete a conversation and its messages |
+| `POST` | `/projects/{project_id}/conversations/{conversation_id}/messages` | Generate a response from a bounded question, history, and local excerpts |
+
+Message requests require a UUID `request_id` and a non-empty message of at most 8,000 characters. Assistant answers are capped at 16,000 characters; persisted history views return the latest 100 messages. Provider failures use sanitized error responses and leave a visible failed message. Tests use a fake provider and never make live or billable requests.

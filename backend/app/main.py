@@ -2,6 +2,7 @@
 
 import logging
 from contextlib import asynccontextmanager
+import asyncio
 from http import HTTPStatus
 from typing import AsyncIterator
 
@@ -49,6 +50,8 @@ def create_app(settings: Settings | None = None, ai_provider: AIProvider | None 
     )
     application.state.settings = configured
     application.state.ai_provider = provider
+    application.state.active_conversations = set()
+    application.state.active_generation_slots = asyncio.Semaphore(2)
     application.include_router(api_router, prefix=configured.api_prefix)
 
     @application.exception_handler(RequestValidationError)

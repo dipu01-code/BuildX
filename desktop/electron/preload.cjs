@@ -27,4 +27,11 @@ contextBridge.exposeInMainWorld('buildxDesktop', Object.freeze({
   getProjectIndexStatus: (projectId) => ipcRenderer.invoke('context:index-status', projectId),
   listProjectIndexedFiles: (projectId) => ipcRenderer.invoke('context:index-files', projectId),
   searchProjectContext: (projectId, query, limit = 8) => ipcRenderer.invoke('context:search', projectId, query, limit),
+  createConversation: (projectId) => ipcRenderer.invoke('conversations:create', projectId),
+  listConversations: (projectId) => ipcRenderer.invoke('conversations:list', projectId),
+  getConversation: (projectId, conversationId) => ipcRenderer.invoke('conversations:get', projectId, conversationId),
+  sendConversationMessage: (projectId, conversationId, requestId, content) => ipcRenderer.invoke(
+    'conversations:send', projectId, conversationId, requestId, content,
+  ),
+  deleteConversation: (projectId, conversationId) => ipcRenderer.invoke('conversations:delete', projectId, conversationId),
 }));

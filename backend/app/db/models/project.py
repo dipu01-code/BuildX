@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, JSON, String, Text, Uuid
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, JSON, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -98,3 +98,42 @@ class ProjectIndexJob(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class ProjectConversation(Base):
+    """A project-scoped assistant conversation; stores only user-visible content."""
+
+    __tablename__ = "project_conversations"
+    __table_args__ = (Index("ix_project_conversations_project_updated", "project_id", "updated_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(120), nullable=False, default="New conversation")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class ProjectConversationMessage(Base):
+    """One visible user or assistant message and its bounded source references."""
+
+    __tablename__ = "project_conversation_messages"
+    __table_args__ = (
+        Index("ix_project_conversation_messages_conversation_created", "conversation_id", "created_at"),
+        Index("uq_project_conversation_messages_request_role", "conversation_id", "request_id", "role", unique=True),
+        CheckConstraint("role IN ('user', 'assistant')", name="ck_project_conversation_messages_role"),
+        CheckConstraint("status IN ('pending', 'complete', 'failed', 'interrupted')", name="ck_project_conversation_messages_status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("project_conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    request_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="complete")
+    sources: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    error_message: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

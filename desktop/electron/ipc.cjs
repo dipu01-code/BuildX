@@ -26,6 +26,13 @@ const CONTEXT_CHANNELS = Object.freeze({
   files: 'context:index-files',
   search: 'context:search',
 });
+const CONVERSATION_CHANNELS = Object.freeze({
+  create: 'conversations:create',
+  list: 'conversations:list',
+  get: 'conversations:get',
+  send: 'conversations:send',
+  delete: 'conversations:delete',
+});
 const PLANNER_CHANNELS = Object.freeze({
   generate: 'plans:generate', list: 'plans:list', get: 'plans:get', save: 'plans:save', update: 'plans:update', delete: 'plans:delete',
 });
@@ -74,6 +81,7 @@ function registerIpcHandlers({
   createWorkspaceFile, createWorkspaceFolder, moveWorkspaceItem, deleteWorkspaceItem,
   refreshProjectIndex, getProjectIndexStatus, listProjectIndexedFiles, searchProjectContext,
   generatePlan, listPlans, getPlan, savePlan, updatePlan, deletePlan,
+  createConversation, listConversations, getConversation, sendConversationMessage, deleteConversation,
 }) {
   ipcMain.handle(APP_INFO_CHANNEL, (event, ...args) => {
     validateSender(event);
@@ -240,6 +248,40 @@ function registerIpcHandlers({
     }
     return searchProjectContext(args[0], args[1], args[2]);
   });
+
+  ipcMain.handle(CONVERSATION_CHANNELS.create, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 1) throw new TypeError('conversations:create requires a project identifier.');
+    validateProjectId(args[0]);
+    return createConversation(args[0]);
+  });
+  ipcMain.handle(CONVERSATION_CHANNELS.list, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 1) throw new TypeError('conversations:list requires a project identifier.');
+    validateProjectId(args[0]);
+    return listConversations(args[0]);
+  });
+  ipcMain.handle(CONVERSATION_CHANNELS.get, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 2) throw new TypeError('conversations:get requires project and conversation identifiers.');
+    validateProjectId(args[0]); validateProjectId(args[1]);
+    return getConversation(args[0], args[1]);
+  });
+  ipcMain.handle(CONVERSATION_CHANNELS.send, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 4) throw new TypeError('conversations:send requires project, conversation, request, and message.');
+    validateProjectId(args[0]); validateProjectId(args[1]); validateProjectId(args[2]);
+    if (typeof args[3] !== 'string' || !args[3].trim() || args[3].length > 8000) {
+      throw new TypeError('Enter a message of 1 to 8,000 characters.');
+    }
+    return sendConversationMessage(args[0], args[1], args[2], args[3]);
+  });
+  ipcMain.handle(CONVERSATION_CHANNELS.delete, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 2) throw new TypeError('conversations:delete requires project and conversation identifiers.');
+    validateProjectId(args[0]); validateProjectId(args[1]);
+    return deleteConversation(args[0], args[1]);
+  });
 }
 
-module.exports = { AI_CHANNELS, CONTEXT_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };
+module.exports = { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };

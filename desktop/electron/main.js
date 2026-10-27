@@ -7,6 +7,7 @@ const { createPlannerApi } = require('./planner-api.cjs');
 const { createProjectApi } = require('./project-api.cjs');
 const { createContextApi } = require('./context-api.cjs');
 const { createContextIndexer } = require('./context-indexer.cjs');
+const { createConversationApi } = require('./conversation-api.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
 const {
@@ -35,6 +36,7 @@ const aiApi = createAIAPI({ getBaseUrl: () => backendBaseUrl });
 const plannerApi = createPlannerApi({ getBaseUrl: () => backendBaseUrl });
 const workspaceFiles = createWorkspaceFiles();
 const contextApi = createContextApi({ getBaseUrl: () => backendBaseUrl });
+const conversationApi = createConversationApi({ getBaseUrl: () => backendBaseUrl });
 const contextIndexer = createContextIndexer({ workspaceFiles, projectApi, contextApi });
 
 function isTrustedUrl(value) {
@@ -62,6 +64,7 @@ registerIpcHandlers({
   ...projectApi,
   ...aiApi,
   ...plannerApi,
+  ...conversationApi,
   refreshProjectIndex: (projectId) => contextIndexer.refresh(projectId),
   getProjectIndexStatus: (projectId) => contextApi.getIndexStatus(projectId),
   listProjectIndexedFiles: (projectId) => contextApi.listIndexedFiles(projectId, { limit: 200 }),

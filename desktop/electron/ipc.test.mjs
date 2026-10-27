@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { AI_CHANNELS, CONTEXT_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
+const { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
 const APP_INFO_CHANNEL = 'app:get-info';
 
 function makeIpc() {
@@ -14,6 +14,29 @@ function makeIpc() {
 }
 
 describe('privileged IPC validation', () => {
+  it('exposes only validated project-scoped conversation actions', async () => {
+    const { ipcMain, handlers } = makeIpc();
+    const createConversation = vi.fn().mockResolvedValue({ id: 'conversation' });
+    const listConversations = vi.fn().mockResolvedValue([]);
+    const getConversation = vi.fn().mockResolvedValue({ id: 'conversation' });
+    const sendConversationMessage = vi.fn().mockResolvedValue({ assistant_message: { status: 'complete' } });
+    const deleteConversation = vi.fn().mockResolvedValue(null);
+    registerIpcHandlers({ ipcMain, validateSender: vi.fn(), getAppInfo: vi.fn(),
+      createConversation, listConversations, getConversation, sendConversationMessage, deleteConversation });
+    const event = { senderFrame: { url: 'file:///app/index.html' } };
+    const project = '550e8400-e29b-41d4-a716-446655440000';
+    const conversation = '550e8400-e29b-41d4-a716-446655440001';
+    const request = '550e8400-e29b-41d4-a716-446655440002';
+    await handlers.get(CONVERSATION_CHANNELS.create)(event, project);
+    await handlers.get(CONVERSATION_CHANNELS.list)(event, project);
+    await handlers.get(CONVERSATION_CHANNELS.get)(event, project, conversation);
+    await handlers.get(CONVERSATION_CHANNELS.send)(event, project, conversation, request, 'Question');
+    await handlers.get(CONVERSATION_CHANNELS.delete)(event, project, conversation);
+    expect(sendConversationMessage).toHaveBeenCalledExactlyOnceWith(project, conversation, request, 'Question');
+    expect(() => handlers.get(CONVERSATION_CHANNELS.send)(event, project, conversation, request, ' ')).toThrow(/message/i);
+    expect(() => handlers.get(CONVERSATION_CHANNELS.get)(event, project, '../other')).toThrow(/identifier/i);
+  });
+
   it('exposes only project-scoped context refresh, status, and search actions', async () => {
     const { ipcMain, handlers } = makeIpc();
     const refreshProjectIndex = vi.fn().mockResolvedValue({ accepted: true });

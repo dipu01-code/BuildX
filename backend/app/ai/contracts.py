@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AIErrorCategory(str, Enum):
@@ -45,6 +45,14 @@ class StructuredGenerationRequest(BaseModel):
     max_output_tokens: int = 6000
 
 
+class TextGenerationRequest(BaseModel):
+    """Bounded user-visible response generation without structured output mode."""
+
+    instruction: str = Field(min_length=1, max_length=4000)
+    user_content: str = Field(min_length=1, max_length=24_000)
+    max_output_tokens: int = Field(default=1600, ge=1, le=2000)
+
+
 class ProviderError(Exception):
     """A safe normalized failure; never retain or expose the SDK exception text."""
 
@@ -66,6 +74,9 @@ class AIProvider(Protocol):
         self, request: StructuredGenerationRequest
     ) -> NormalizedAIResponse:
         """Generate bounded JSON matching the supplied JSON Schema."""
+
+    async def generate_text(self, request: TextGenerationRequest) -> NormalizedAIResponse:
+        """Generate a bounded user-visible text response."""
 
 
 class AIProviderStatus(BaseModel):

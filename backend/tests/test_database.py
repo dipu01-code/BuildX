@@ -71,10 +71,11 @@ def test_migrations_upgrade_fresh_database_twice(monkeypatch, tmp_path: Path) ->
             tables = connection.exec_driver_sql(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
             ).scalars().all()
-        assert revision == "0004_project_context"
+        assert revision == "0005_project_conversations"
         assert set(tables) == {
             "alembic_version", "projects", "project_plans", "project_indexed_files",
-            "project_indexed_chunks", "project_index_jobs",
+            "project_indexed_chunks", "project_index_jobs", "project_conversations",
+            "project_conversation_messages",
         }
         engine.dispose()
     finally:
@@ -84,7 +85,39 @@ def test_migrations_upgrade_fresh_database_twice(monkeypatch, tmp_path: Path) ->
 def test_model_metadata_registers_project_tables() -> None:
     assert set(Base.metadata.tables) == {
         "projects", "project_plans", "project_indexed_files", "project_indexed_chunks", "project_index_jobs",
+        "project_conversations", "project_conversation_messages",
     }
+
+
+def test_phase_eleven_migration_preserves_context_and_adds_conversations(monkeypatch, tmp_path: Path) -> None:
+    database = tmp_path / "phase-eleven-migration.db"
+    monkeypatch.setenv("BUILDX_DATABASE_URL", f"sqlite:///{database}")
+    get_settings.cache_clear()
+    try:
+        config = Config("alembic.ini")
+        command.upgrade(config, "0004_project_context")
+        engine = create_database_engine(Settings(database_url=f"sqlite:///{database}"))
+        factory = create_session_factory(engine)
+        with factory.begin() as session:
+            project = Project(name="Existing indexed project")
+            session.add(project)
+            session.flush()
+            from app.db.models import ProjectIndexJob
+            session.add(ProjectIndexJob(project_id=project.id, state="up_to_date", discovered_count=0, processed_count=0, skipped_count=0, skip_reasons={}, errors=[]))
+            project_id = project.id
+        engine.dispose()
+        command.upgrade(config, "head")
+        upgraded_engine = create_database_engine(Settings(database_url=f"sqlite:///{database}"))
+        upgraded_factory = create_session_factory(upgraded_engine)
+        with upgraded_factory() as session:
+            assert session.get(Project, project_id).name == "Existing indexed project"
+            assert session.scalar(text("SELECT COUNT(*) FROM project_index_jobs")) == 1
+            assert session.scalar(text("SELECT COUNT(*) FROM project_conversations")) == 0
+            revision = session.scalar(text("SELECT version_num FROM alembic_version"))
+        assert revision == "0005_project_conversations"
+        upgraded_engine.dispose()
+    finally:
+        get_settings.cache_clear()
 
 
 def test_phase_ten_migration_preserves_existing_project_rows(monkeypatch, tmp_path: Path) -> None:
