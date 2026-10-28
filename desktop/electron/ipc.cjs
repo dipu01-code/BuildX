@@ -33,6 +33,10 @@ const CONVERSATION_CHANNELS = Object.freeze({
   send: 'conversations:send',
   delete: 'conversations:delete',
 });
+const PROPOSAL_CHANNELS = Object.freeze({
+  generate: 'proposals:generate', list: 'proposals:list', get: 'proposals:get',
+  approve: 'proposals:approve', reject: 'proposals:reject', apply: 'proposals:apply',
+});
 const PLANNER_CHANNELS = Object.freeze({
   generate: 'plans:generate', list: 'plans:list', get: 'plans:get', save: 'plans:save', update: 'plans:update', delete: 'plans:delete',
 });
@@ -82,6 +86,7 @@ function registerIpcHandlers({
   refreshProjectIndex, getProjectIndexStatus, listProjectIndexedFiles, searchProjectContext,
   generatePlan, listPlans, getPlan, savePlan, updatePlan, deletePlan,
   createConversation, listConversations, getConversation, sendConversationMessage, deleteConversation,
+  generateProposal, listProposals, getProposal, approveProposal, rejectProposal, applyApprovedChangeProposal,
 }) {
   ipcMain.handle(APP_INFO_CHANNEL, (event, ...args) => {
     validateSender(event);
@@ -116,6 +121,20 @@ function registerIpcHandlers({
       if (args.length !== expectedArgs) {
         throw new TypeError('Invalid project planning request.');
       }
+      return handler(...args);
+    });
+  }
+
+  for (const [channel, handler, count] of [
+    [PROPOSAL_CHANNELS.generate, generateProposal, 2], [PROPOSAL_CHANNELS.list, listProposals, 1],
+    [PROPOSAL_CHANNELS.get, getProposal, 2], [PROPOSAL_CHANNELS.approve, approveProposal, 2],
+    [PROPOSAL_CHANNELS.reject, rejectProposal, 2], [PROPOSAL_CHANNELS.apply, applyApprovedChangeProposal, 2],
+  ]) {
+    ipcMain.handle(channel, (event, ...args) => {
+      validateSender(event);
+      if (args.length !== count) throw new TypeError('Invalid change proposal request.');
+      validateProjectId(args[0]);
+      if (count === 2 && channel !== PROPOSAL_CHANNELS.generate) validateProjectId(args[1]);
       return handler(...args);
     });
   }

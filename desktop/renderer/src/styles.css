@@ -463,3 +463,20 @@ button.starter-item:hover { background: rgba(255,255,255,.025); }
   .assistant-message { max-width: 100%; }
   .assistant-composer-footer { align-items: stretch; flex-direction: column; }
 }
+.proposal-review { margin: 1.25rem 0; padding: 1rem; border: 1px solid var(--border, #39443b); border-radius: 12px; background: rgba(18, 25, 20, .78); }
+.proposal-review h3, .proposal-card h4 { margin: 0 0 .6rem; }
+.proposal-review > p, .proposal-card > p { color: var(--muted, #a0aca1); }
+.proposal-form { display: grid; gap: .55rem; max-width: 48rem; }
+.proposal-form input:not([type="checkbox"]), .proposal-form textarea { width: 100%; padding: .65rem .75rem; color: inherit; background: #101511; border: 1px solid #455247; border-radius: 7px; font: inherit; }
+.proposal-form label { font-size: .9rem; }
+.proposal-form label:has(input[type="checkbox"]) { display: flex; align-items: center; gap: .5rem; }
+.proposal-card { margin-top: 1rem; padding: 1rem; border: 1px solid #526151; border-radius: 9px; }
+.proposal-card > div:first-child, .proposal-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.proposal-status { text-transform: capitalize; font-size: .8rem; color: #c6dda5; }
+.proposal-content { max-height: 28rem; overflow: auto; padding: .75rem; white-space: pre; tab-size: 2; color: #dce4da; background: #101511; border-left: 3px solid #b2d78c; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.proposal-actions { justify-content: flex-end; margin-top: 1rem; }
+.proposal-diff-added { display: block; color: #c5e9a2; background: rgba(94, 139, 70, .17); }
+.proposal-diff-removed { display: block; color: #ffb4a8; background: rgba(161, 68, 55, .17); }
+.proposal-diff-context { display: block; color: #b7c2b9; }
+.proposal-history { display: grid; gap: .5rem; max-width: 48rem; margin-top: .9rem; }
+.proposal-history select { padding: .55rem; color: inherit; background: #101511; border: 1px solid #455247; border-radius: 7px; }

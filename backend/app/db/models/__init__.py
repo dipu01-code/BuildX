@@ -8,9 +8,9 @@ from app.db.models.project import (
     ProjectIndexedChunk,
     ProjectIndexedFile,
 )
-from app.db.models.project_plan import ProjectPlan
+from app.db.models.project_plan import ChangeProposal, ProjectPlan
 
 __all__ = [
-    "Project", "ProjectPlan", "ProjectIndexJob", "ProjectIndexedFile", "ProjectIndexedChunk",
+    "Project", "ProjectPlan", "ChangeProposal", "ProjectIndexJob", "ProjectIndexedFile", "ProjectIndexedChunk",
     "ProjectConversation", "ProjectConversationMessage",
 ]

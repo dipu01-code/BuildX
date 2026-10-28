@@ -15,7 +15,7 @@ const GENERATED_DIRECTORIES = new Set([
   '.next', '.nuxt', '.cache', '.turbo', '.parcel-cache', '.vite', '.venv', 'venv', 'env',
   '.tox', '.mypy_cache', '.pytest_cache', '.ruff_cache', '__pycache__', 'target', '.idea',
 ]);
-const SENSITIVE_DIRECTORIES = new Set(['.aws', '.ssh', 'secrets', 'credentials', 'certificates']);
+const SENSITIVE_DIRECTORIES = new Set(['.git', '.aws', '.ssh', 'secrets', 'credentials', 'certificates']);
 const SENSITIVE_FILE_PATTERNS = [
   /^\.env(?:\..*)?$/i, /^\.npmrc$/i, /^\.pypirc$/i, /^\.netrc$/i, /^\.dockercfg$/i,
   /^(?:credentials|secrets|auth)(?:\.[^.]+)?$/i, /^service-account.*\.json$/i,
@@ -205,6 +205,34 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
     });
   }
 
+  async function inspectProposalTarget(projectApi, projectId, relativePath) {
+    return withRoot(projectApi, projectId, async (root) => {
+      const segments = parseRelativePath(relativePath);
+      if (segments.some((segment) => SENSITIVE_DIRECTORIES.has(segment.toLowerCase())
+        || SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(segment)))) {
+        throw controlledError('This protected or sensitive path cannot be used for a proposal.', 'PROTECTED_PATH');
+      }
+      const { target } = await resolvePath(root, relativePath, { allowMissingFinal: true });
+      try {
+        const info = await fsImpl.lstat(target);
+        if (info.isSymbolicLink() || !info.isFile()) throw controlledError('Choose a regular text file for a proposal.', 'INVALID_PROPOSAL_TARGET');
+        if (info.size > MAX_TEXT_FILE_BYTES) throw controlledError('The target file exceeds the 1 MiB proposal limit.', 'FILE_TOO_LARGE');
+        const bytes = await fsImpl.readFile(target);
+        if (bytes.includes(0)) throw controlledError('Binary files cannot be proposed for editing.', 'BINARY_FILE');
+        let content;
+        try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+        catch { throw controlledError('The target file is not valid UTF-8 text.', 'INVALID_TEXT'); }
+        if (PRIVATE_KEY_CONTENT.test(content) || SECRET_ASSIGNMENT_CONTENT.test(content)) {
+          throw controlledError('Files containing likely credentials cannot be sent for proposal generation.', 'SENSITIVE_CONTENT');
+        }
+        return { exists: true, content, hash: getRevision(bytes) };
+      } catch (error) {
+        if (error.code === 'ENOENT') return { exists: false, content: null, hash: null };
+        throw error;
+      }
+    });
+  }
+
   async function createFile(projectApi, projectId, relativePath) {
     return withRoot(projectApi, projectId, async (root) => {
       const { target } = await resolvePath(root, relativePath, { allowMissingFinal: true });
@@ -252,6 +280,60 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
         }
         await fsImpl.rename(temporaryPath, latest.target);
         return { path: relativePath, size: contentBytes.length, revision: getRevision(contentBytes) };
+      } finally {
+        await handle?.close();
+        await fsImpl.rm(temporaryPath, { force: true }).catch(() => {});
+      }
+    });
+  }
+
+  async function applyProposal(projectApi, projectId, proposal) {
+    return withRoot(projectApi, projectId, async (root) => {
+      if (proposal?.status !== 'approved') throw controlledError('Only an explicitly approved proposal can be applied.', 'PROPOSAL_NOT_APPROVED');
+      const operation = proposal?.operation;
+      if (!operation || !['create', 'modify'].includes(operation.operation)
+        || typeof operation.proposed_content !== 'string' || Buffer.byteLength(operation.proposed_content, 'utf8') > MAX_TEXT_FILE_BYTES) {
+        throw controlledError('The approved proposal is invalid or too large.', 'INVALID_PROPOSAL');
+      }
+      const segments = parseRelativePath(operation.relative_path);
+      if (segments.some((segment) => SENSITIVE_DIRECTORIES.has(segment.toLowerCase())
+        || SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(segment)))) {
+        throw controlledError('This protected or sensitive path cannot be changed by a proposal.', 'PROTECTED_PATH');
+      }
+      const initial = await resolvePath(root, operation.relative_path, { allowMissingFinal: operation.operation === 'create' });
+      let originalBytes = null;
+      let mode = 0o600;
+      if (operation.operation === 'modify') {
+        if (!/^[0-9a-f]{64}$/.test(operation.original_hash || '')) throw controlledError('The approved base version is invalid.', 'INVALID_PROPOSAL');
+        const info = await fsImpl.stat(initial.target);
+        if (!info.isFile() || info.size > MAX_TEXT_FILE_BYTES) throw controlledError('The target is not an editable text file.', 'FILE_TOO_LARGE');
+        mode = info.mode & 0o777;
+        originalBytes = await fsImpl.readFile(initial.target);
+        if (getRevision(originalBytes) !== operation.original_hash) throw controlledError('The file changed since review. Regenerate and review a new proposal.', 'FILE_CONFLICT');
+        if (originalBytes.includes(0)) throw controlledError('Binary files cannot be changed by a proposal.', 'BINARY_FILE');
+      } else if (operation.original_hash !== null) {
+        throw controlledError('The new file proposal has an invalid base version.', 'INVALID_PROPOSAL');
+      }
+      const contentBytes = Buffer.from(operation.proposed_content, 'utf8');
+      const parent = path.dirname(initial.target);
+      const temporaryPath = path.join(parent, `.buildx-${crypto.randomUUID()}.tmp`);
+      let handle;
+      try {
+        handle = await fsImpl.open(temporaryPath, 'wx', mode);
+        await handle.writeFile(contentBytes);
+        await handle.sync();
+        await handle.close();
+        handle = null;
+        const latest = await resolvePath(root, operation.relative_path, { allowMissingFinal: operation.operation === 'create' });
+        if (operation.operation === 'create') {
+          await fsImpl.link(temporaryPath, latest.target);
+          await fsImpl.unlink(temporaryPath);
+        } else {
+          const latestBytes = await fsImpl.readFile(latest.target);
+          if (getRevision(latestBytes) !== operation.original_hash) throw controlledError('The file changed while applying the proposal. Regenerate and review a new proposal.', 'FILE_CONFLICT');
+          await fsImpl.rename(temporaryPath, latest.target);
+        }
+        return { path: operation.relative_path, result_hash: getRevision(contentBytes), status: 'applied' };
       } finally {
         await handle?.close();
         await fsImpl.rm(temporaryPath, { force: true }).catch(() => {});
@@ -552,7 +634,9 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
   return Object.freeze({
     list: safeOperation(list),
     readText: safeOperation(readText),
+    inspectProposalTarget: safeOperation(inspectProposalTarget),
     writeText: safeOperation(writeText),
+    applyProposal: safeOperation(applyProposal),
     createFile: safeOperation(createFile),
     createFolder: safeOperation(createFolder),
     move: safeOperation(move),

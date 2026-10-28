@@ -71,9 +71,9 @@ def test_migrations_upgrade_fresh_database_twice(monkeypatch, tmp_path: Path) ->
             tables = connection.exec_driver_sql(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
             ).scalars().all()
-        assert revision == "0005_project_conversations"
+        assert revision == "0006_change_proposals"
         assert set(tables) == {
-            "alembic_version", "projects", "project_plans", "project_indexed_files",
+            "alembic_version", "projects", "project_plans", "project_indexed_files", "change_proposals",
             "project_indexed_chunks", "project_index_jobs", "project_conversations",
             "project_conversation_messages",
         }
@@ -85,7 +85,7 @@ def test_migrations_upgrade_fresh_database_twice(monkeypatch, tmp_path: Path) ->
 def test_model_metadata_registers_project_tables() -> None:
     assert set(Base.metadata.tables) == {
         "projects", "project_plans", "project_indexed_files", "project_indexed_chunks", "project_index_jobs",
-        "project_conversations", "project_conversation_messages",
+        "project_conversations", "project_conversation_messages", "change_proposals",
     }
 
 
@@ -114,7 +114,7 @@ def test_phase_eleven_migration_preserves_context_and_adds_conversations(monkeyp
             assert session.scalar(text("SELECT COUNT(*) FROM project_index_jobs")) == 1
             assert session.scalar(text("SELECT COUNT(*) FROM project_conversations")) == 0
             revision = session.scalar(text("SELECT version_num FROM alembic_version"))
-        assert revision == "0005_project_conversations"
+        assert revision == "0006_change_proposals"
         upgraded_engine.dispose()
     finally:
         get_settings.cache_clear()

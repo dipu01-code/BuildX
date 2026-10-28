@@ -10,6 +10,7 @@ BUILDX is a local-first desktop workspace for organizing development projects, b
 - Build a bounded local project context index, search its text, and open a matching source location in the editor.
 - Configure the backend OpenAI provider and test its connection.
 - Use project-scoped assistant conversations with bounded indexed context, persisted history, retryable responses, and source references. The assistant explains code and suggests changes; it does not apply edits or run tools.
+- Generate one-file code change proposals in the assistant, inspect the exact original and proposed contents, and explicitly approve before BUILDX applies them. Proposals are persisted and rejectable; creates and modifications are supported, while deletion and multi-file changes are not.
 
 There are no screenshots or demo assets in the repository yet.
 
@@ -20,6 +21,7 @@ There are no screenshots or demo assets in the repository yet.
 - **React renderer** provides project management, planning, the workspace file tree and editor, local context search, settings, and assistant chat.
 - **FastAPI backend** provides the versioned API, OpenAI provider adapter, conversation and project services, and persistence.
 - **SQLite and Alembic** store project records, plans, context chunks, indexing state, conversations, and visible messages. Migrations are applied by Electron at startup.
+- Change proposals and their lifecycle are stored in SQLite. Electron is the only proposal-driven file writer and requires an approved proposal plus the currently confirmed project folder.
 - **Project context** is indexed and searched locally with bounded lexical matching. It is not vector or semantic search.
 
 ## Technology
@@ -118,7 +120,7 @@ BUILDX stores project metadata, plans, indexed text, and conversation history in
 
 AI requests go from the backend to the configured OpenAI provider. Assistant requests include the user's question and up to five matching indexed excerpts (up to 6,000 characters total), with relative path and line ranges. Conversation history is stored locally; only a bounded recent portion is included in a request. Project plan generation also sends the plan brief and preferences to the provider. OpenAI responses are requested with provider-side storage disabled. Provider credentials remain in backend environment configuration and are not exposed to the renderer.
 
-The assistant treats project excerpts as untrusted data. It does not have filesystem, shell, or tool access and cannot modify files. It provides explanations and proposed code as text. Streaming, autonomous execution, and AI-driven file changes are not implemented.
+The conversational assistant treats project excerpts as untrusted data and cannot apply changes, run tools, or access the filesystem. Phase 12 adds a separate review-first proposal path: it handles one file per proposal, supports creating or modifying text files up to 1 MiB, and displays the full original and proposed contents. Applying requires a deliberate approval action; Electron checks that the affected editor buffer is clean, that the project folder remains authorized, and that the original SHA-256 still matches. New file creation fails if the destination already exists. Protected credential and key paths, traversal, and symlinks are rejected. Multi-file atomicity and rollback are not provided; the workflow is limited to one operation to avoid partial change sets. A local process can still race path-based filesystem calls, as documented for Phase 6. The workflow does not execute commands or tests. Run `UV_CACHE_DIR=/private/tmp/buildx-uv-cache uv run pytest` from `backend/` and `npm run check` from the repository root.
 
 ## Limitations and roadmap
 

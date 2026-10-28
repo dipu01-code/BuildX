@@ -34,4 +34,10 @@ contextBridge.exposeInMainWorld('buildxDesktop', Object.freeze({
     'conversations:send', projectId, conversationId, requestId, content,
   ),
   deleteConversation: (projectId, conversationId) => ipcRenderer.invoke('conversations:delete', projectId, conversationId),
+  generateChangeProposal: (projectId, payload) => ipcRenderer.invoke('proposals:generate', projectId, payload),
+  listChangeProposals: (projectId) => ipcRenderer.invoke('proposals:list', projectId),
+  getChangeProposal: (projectId, proposalId) => ipcRenderer.invoke('proposals:get', projectId, proposalId),
+  approveChangeProposal: (projectId, proposalId) => ipcRenderer.invoke('proposals:approve', projectId, proposalId),
+  rejectChangeProposal: (projectId, proposalId) => ipcRenderer.invoke('proposals:reject', projectId, proposalId),
+  applyApprovedChangeProposal: (projectId, proposalId) => ipcRenderer.invoke('proposals:apply', projectId, proposalId),
 }));

@@ -26,6 +26,10 @@ describe('project coding assistant panel', () => {
       getConversation: vi.fn().mockResolvedValue(detail()),
       sendConversationMessage: vi.fn(),
       deleteConversation: vi.fn().mockResolvedValue(null),
+      listChangeProposals: vi.fn().mockResolvedValue([]),
+      generateChangeProposal: vi.fn(),
+      rejectChangeProposal: vi.fn(),
+      getChangeProposal: vi.fn(),
     };
   });
   afterEach(() => { cleanup(); delete window.buildxDesktop; });
@@ -85,5 +89,26 @@ describe('project coding assistant panel', () => {
     window.buildxDesktop.getConversation.mockResolvedValue(detail([userMessage, { ...answer, sources: [] }]));
     render(<ProjectAssistantPanel project={project} onOpenSource={vi.fn()} />);
     expect(await screen.findByText(/General answer · no indexed excerpts matched/)).toBeInTheDocument();
+  });
+
+  it('renders a pending proposal and marks it rejected only after the explicit reject action', async () => {
+    const proposal = {
+      id: '550e8400-e29b-41d4-a716-446655440005', project_id: project.id, conversation_id: null,
+      summary: 'Add a greeting', operation: { operation: 'create', explanation: 'Add a greeting', relative_path: 'src/greeting.py', original_hash: null, original_content: null, proposed_content: 'print("hello")\n' },
+      status: 'pending_review', outcome: null, created_at: date, updated_at: date,
+    };
+    window.buildxDesktop.generateChangeProposal.mockResolvedValue(proposal);
+    window.buildxDesktop.rejectChangeProposal.mockResolvedValue({ ...proposal, status: 'rejected' });
+    render(<ProjectAssistantPanel project={project} onOpenSource={vi.fn()} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Project-relative file path' }), { target: { value: 'src/greeting.py' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Requested change' }), { target: { value: 'Add a greeting' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Create a new file/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate proposal' }));
+    expect(await screen.findByText('print("hello")')).toBeInTheDocument();
+    expect(screen.getByText('pending review')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Reject proposal' }));
+    await waitFor(() => expect(screen.getByText('rejected')).toBeInTheDocument());
+    expect(window.buildxDesktop.rejectChangeProposal).toHaveBeenCalledExactlyOnceWith(project.id, proposal.id);
+    expect(window.buildxDesktop.applyApprovedChangeProposal).toBeUndefined();
   });
 });

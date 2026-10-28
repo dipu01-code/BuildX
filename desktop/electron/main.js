@@ -8,6 +8,7 @@ const { createProjectApi } = require('./project-api.cjs');
 const { createContextApi } = require('./context-api.cjs');
 const { createContextIndexer } = require('./context-indexer.cjs');
 const { createConversationApi } = require('./conversation-api.cjs');
+const { createChangeProposalApi } = require('./change-proposal-api.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
 const {
@@ -37,6 +38,7 @@ const plannerApi = createPlannerApi({ getBaseUrl: () => backendBaseUrl });
 const workspaceFiles = createWorkspaceFiles();
 const contextApi = createContextApi({ getBaseUrl: () => backendBaseUrl });
 const conversationApi = createConversationApi({ getBaseUrl: () => backendBaseUrl });
+const changeProposalApi = createChangeProposalApi({ getBaseUrl: () => backendBaseUrl });
 const contextIndexer = createContextIndexer({ workspaceFiles, projectApi, contextApi });
 
 function isTrustedUrl(value) {
@@ -65,6 +67,27 @@ registerIpcHandlers({
   ...aiApi,
   ...plannerApi,
   ...conversationApi,
+  ...changeProposalApi,
+  generateProposal: async (projectId, payload) => {
+    const base = await workspaceFiles.inspectProposalTarget(projectApi, projectId, payload.relative_path);
+    const requestedCreate = payload.original_content === null;
+    if (requestedCreate !== !base.exists) throw new Error('The target file changed state. Refresh it and prepare a new proposal.');
+    return changeProposalApi.generateProposal(projectId, {
+      ...payload, original_content: base.content, original_hash: base.hash,
+    });
+  },
+  applyApprovedChangeProposal: async (projectId, proposalId) => {
+    const proposal = await changeProposalApi.getProposal(projectId, proposalId);
+    if (proposal.project_id !== projectId || proposal.status !== 'approved') throw new Error('Only this project’s explicitly approved proposal can be applied.');
+    try {
+      const result = await workspaceFiles.applyProposal(projectApi, projectId, proposal);
+      return changeProposalApi.recordProposalOutcome(projectId, proposalId, { status: 'applied', result_hash: result.result_hash });
+    } catch (error) {
+      const conflicted = error?.code === 'FILE_CONFLICT' || error?.code === 'DESTINATION_EXISTS';
+      await changeProposalApi.recordProposalOutcome(projectId, proposalId, { status: conflicted ? 'conflicted' : 'failed', message: error?.message || 'The change could not be applied.' }).catch(() => {});
+      throw error;
+    }
+  },
   refreshProjectIndex: (projectId) => contextIndexer.refresh(projectId),
   getProjectIndexStatus: (projectId) => contextApi.getIndexStatus(projectId),
   listProjectIndexedFiles: (projectId) => contextApi.listIndexedFiles(projectId, { limit: 200 }),

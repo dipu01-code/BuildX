@@ -22,6 +22,7 @@ describe('preload desktop API', () => {
       'createWorkspaceFile', 'createWorkspaceFolder', 'moveWorkspaceItem', 'deleteWorkspaceItem',
       'refreshProjectIndex', 'getProjectIndexStatus', 'listProjectIndexedFiles', 'searchProjectContext',
       'createConversation', 'listConversations', 'getConversation', 'sendConversationMessage', 'deleteConversation',
+      'generateChangeProposal', 'listChangeProposals', 'getChangeProposal', 'approveChangeProposal', 'rejectChangeProposal', 'applyApprovedChangeProposal',
     ]);
     await api.getAppInfo();
     expect(invoke).toHaveBeenCalledExactlyOnceWith('app:get-info');

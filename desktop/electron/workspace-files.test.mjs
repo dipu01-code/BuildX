@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -72,6 +73,35 @@ describe('project-scoped workspace filesystem', () => {
       .rejects.toThrow(/changed on disk/i);
     expect(await fs.readFile(target, 'utf8')).toBe('const value = 3;');
     expect((await fs.readdir(projectRoot)).some((name) => name.endsWith('.tmp'))).toBe(false);
+  });
+
+  it('applies only approved proposal contents when the reviewed hash still matches', async () => {
+    const target = path.join(projectRoot, 'proposal.txt');
+    await fs.writeFile(target, 'before\n');
+    const original = await fs.readFile(target);
+    const hash = crypto.createHash('sha256').update(original).digest('hex');
+    await expect(workspace.applyProposal(projectApi, projectId, { status: 'approved', operation: { operation: 'modify', relative_path: 'proposal.txt', original_hash: hash, proposed_content: 'after\n' } })).resolves.toMatchObject({ status: 'applied' });
+    expect(await fs.readFile(target, 'utf8')).toBe('after\n');
+    await fs.writeFile(target, 'newer\n');
+    await expect(workspace.applyProposal(projectApi, projectId, { status: 'approved', operation: { operation: 'modify', relative_path: 'proposal.txt', original_hash: hash, proposed_content: 'stale\n' } })).rejects.toThrow(/changed since review/i);
+    expect(await fs.readFile(target, 'utf8')).toBe('newer\n');
+  });
+
+  it('creates a proposal file without overwriting and rejects sensitive paths', async () => {
+    const proposal = { status: 'approved', operation: { operation: 'create', relative_path: 'new/nested.txt', original_hash: null, proposed_content: '' } };
+    await fs.mkdir(path.join(projectRoot, 'new'));
+    await expect(workspace.applyProposal(projectApi, projectId, proposal)).resolves.toMatchObject({ status: 'applied' });
+    await expect(workspace.applyProposal(projectApi, projectId, proposal)).rejects.toThrow(/already exists/i);
+    await expect(workspace.applyProposal(projectApi, projectId, { status: 'approved', operation: { ...proposal.operation, relative_path: '.env' } })).rejects.toThrow(/sensitive path/i);
+  });
+
+  it('reads a proposal base only from the authorized project and refuses protected or credential-bearing files', async () => {
+    await fs.writeFile(path.join(projectRoot, 'safe.txt'), 'safe');
+    await expect(workspace.inspectProposalTarget(projectApi, projectId, 'safe.txt')).resolves.toMatchObject({ exists: true, content: 'safe' });
+    await expect(workspace.inspectProposalTarget(projectApi, projectId, 'new.txt')).resolves.toMatchObject({ exists: false, content: null });
+    await fs.writeFile(path.join(projectRoot, 'notes.txt'), 'api_key=abcdefghijklmnopqrstuvwxyz0123456789');
+    await expect(workspace.inspectProposalTarget(projectApi, projectId, 'notes.txt')).rejects.toThrow(/credentials/i);
+    await expect(workspace.inspectProposalTarget(projectApi, projectId, '.git/config')).rejects.toThrow(/invalid path segment|symbolic links|protected/i);
   });
 
   it('creates without overwriting, renames, moves and deletes only scoped items', async () => {

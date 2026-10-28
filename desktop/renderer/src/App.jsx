@@ -237,6 +237,33 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection 
     window.addEventListener('buildx:navigate', onNavigate);
     return () => window.removeEventListener('buildx:navigate', onNavigate);
   }, [files]);
+  useEffect(() => {
+    const checkProposalApply = (event) => {
+      if (event.detail?.projectId !== project.id) return;
+      const open = files.find((file) => file.path === event.detail.path);
+      event.detail.resolve?.(!open || !isDirty(open));
+    };
+    const refreshAfterProposal = async (event) => {
+      if (event.detail?.projectId !== project.id) return;
+      const relativePath = event.detail.path;
+      const parent = relativePath.split('/').slice(0, -1).join('/');
+      await loadDirectory(parent);
+      const open = files.find((file) => file.path === relativePath);
+      if (open && !isDirty(open)) {
+        try {
+          const latest = await window.buildxDesktop.readWorkspaceText(project.id, relativePath);
+          setFiles((current) => current.map((file) => file.path === relativePath
+            ? { ...file, content: latest.content, originalContent: latest.content, revision: latest.revision } : file));
+        } catch (refreshError) { setEditorError(refreshError.message || 'The applied file could not be refreshed.'); }
+      }
+    };
+    window.addEventListener('buildx:proposal-before-apply', checkProposalApply);
+    window.addEventListener('buildx:proposal-applied', refreshAfterProposal);
+    return () => {
+      window.removeEventListener('buildx:proposal-before-apply', checkProposalApply);
+      window.removeEventListener('buildx:proposal-applied', refreshAfterProposal);
+    };
+  }, [files, project.id]);
   async function saveCopy(event) {
     event.preventDefault();
     if (!copyTarget || !copyPath.trim() || busy) return;
