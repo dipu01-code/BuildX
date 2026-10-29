@@ -209,6 +209,24 @@ describe('BUILDX project management', () => {
     expect(window.buildxDesktop.readWorkspaceText).toHaveBeenCalledWith(existing.id, 'README.md');
   });
 
+  it('offers native folder confirmation when a saved workspace needs authorization again', async () => {
+    const existing = project({ root_path: '/tmp/buildx-fixture' });
+    window.buildxDesktop.listProjects.mockResolvedValue([existing]);
+    window.buildxDesktop.listWorkspaceDirectory.mockRejectedValueOnce(new Error(
+      "Error invoking remote method 'workspace:list': Confirm this project folder with the native folder picker before opening its workspace.",
+    )).mockResolvedValue({ path: '', entries: [] });
+    window.buildxDesktop.chooseProjectDirectory.mockResolvedValue({ canceled: false, project: existing });
+    render(<App />);
+    openProjects();
+    fireEvent.click(await screen.findByText('Atlas'));
+    fireEvent.click(screen.getByRole('button', { name: /open workspace/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/native folder picker/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm project folder' }));
+    await waitFor(() => expect(window.buildxDesktop.chooseProjectDirectory).toHaveBeenCalledWith(existing.id));
+    await waitFor(() => expect(window.buildxDesktop.listWorkspaceDirectory).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('associates a folder only after the native picker confirms a selection', async () => {
     const existing = project();
     window.buildxDesktop.listProjects.mockResolvedValue([existing]);

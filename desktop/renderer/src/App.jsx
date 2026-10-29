@@ -100,6 +100,7 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [workspaceView, setWorkspaceView] = useState('Files');
   const [requestedEditorLine, setRequestedEditorLine] = useState(1);
+  const needsFolderConfirmation = /confirm this project folder|folder changed\. choose it again|choose it again to confirm/i.test(error);
 
   async function loadDirectory(relativePath = '', { initial = false } = {}) {
     if (initial) setLoading(true);
@@ -112,6 +113,11 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection 
     } finally {
       if (initial) setLoading(false);
     }
+  }
+
+  async function confirmProjectFolder() {
+    const result = await onChangeFolder();
+    if (result && !result.canceled) await loadDirectory('', { initial: true });
   }
 
   useEffect(() => {
@@ -343,7 +349,9 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection 
   return <section className="workspace-explorer" aria-label="Project workspace">
     <div className="workspace-explorer-heading"><div><span className="eyebrow">PROJECT WORKSPACE</span><h1>{project.name}</h1><p className="workspace-root-path">{project.root_path}</p></div><div className="workspace-explorer-actions"><Button className="quiet-button" onClick={() => loadDirectory('', { initial: true })}>Refresh</Button><Button className="quiet-button" onClick={onChangeFolder}>Change folder</Button><Button className="quiet-button" onClick={leaveWorkspace}>Back to project</Button></div></div>
     <div className="workspace-operation-bar"><Button className="primary-button" onClick={() => { setDialog('file'); setDialogValue(''); }}>New file</Button><Button className="quiet-button" onClick={() => { setDialog('folder'); setDialogValue(''); }}>New folder</Button>{selected && selected.type !== 'symlink' && <><Button className="quiet-button" onClick={() => { setDialog('move'); setDialogValue(selected.path); }}>Rename / move</Button><Button className="danger-button" onClick={() => setDeleteTarget(selected)}>Delete</Button></>}</div>
-    {error && <div className="project-error" role="alert"><span>{error}</span><Button className="quiet-button" onClick={() => loadDirectory('')}>Retry</Button></div>}
+    {error && <div className="project-error" role="alert"><span>{error}</span>{needsFolderConfirmation
+      ? <Button className="quiet-button" onClick={confirmProjectFolder}>Confirm project folder</Button>
+      : <Button className="quiet-button" onClick={() => loadDirectory('')}>Retry</Button>}</div>}
     <Tabs tabs={['Files', 'Context', 'Assistant', 'Terminal', 'Testing']} activeTab={workspaceView} label="Project workspace views" onSelect={setWorkspaceView} />
     {workspaceView === 'Testing' ? <TestingPanel project={project} onOpenSource={openContextResult} onOpenAssistant={() => setWorkspaceView('Assistant')} />
       : workspaceView === 'Terminal' ? <TerminalPanel project={project} />
@@ -598,12 +606,14 @@ function AppContent() {
   async function chooseProjectDirectory(project) {
     try {
       const result = await window.buildxDesktop.chooseProjectDirectory(project.id);
-      if (result?.canceled) return;
+      if (result?.canceled) return result;
       setProjects((current) => current.map((item) => item.id === result.project.id ? result.project : item));
       setActiveProjectId(result.project.id);
       notify(`Folder associated with “${result.project.name}”.`);
+      return result;
     } catch (directoryError) {
       setProjectsError(directoryError.message || 'The project folder could not be selected.');
+      return null;
     }
   }
   function runCommand(command) {
