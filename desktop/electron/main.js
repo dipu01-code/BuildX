@@ -99,7 +99,9 @@ registerIpcHandlers({
       throw error;
     }
   },
-  startTerminalProcess: (projectId, payload) => terminalProcesses.start({ ...payload, projectId }),
+  startTerminalProcess: (projectId, payload) => terminalProcesses.start({
+    projectId, command: payload.command, requestId: payload.request_id, approval: payload.approval,
+  }),
   listTerminalProcesses: (projectId) => ({ sessions: terminalProcesses.list(projectId), limits: terminalProcesses.limits }),
   stopTerminalProcess: (projectId, sessionId) => terminalProcesses.stop(projectId, sessionId),
   discoverTestCommands: (projectId) => testCommandDiscovery.discover(projectId),
