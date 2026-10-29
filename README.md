@@ -11,14 +11,15 @@ BUILDX is a local-first desktop workspace for organizing development projects, b
 - Configure the backend OpenAI provider and test its connection.
 - Use project-scoped assistant conversations with bounded indexed context, persisted history, retryable responses, and source references. The assistant explains code and suggests changes; it does not apply edits or run tools.
 - Generate one-file code change proposals in the assistant, inspect the exact original and proposed contents, and explicitly approve before BUILDX applies them. Proposals are persisted and rejectable; creates and modifications are supported, while deletion and multi-file changes are not.
+- Run manually entered project commands from a reviewed terminal panel. Each run is scoped to the currently authorized project folder, has bounded time/output/concurrency, and can be stopped; process sessions are in memory and are ended when BUILDX closes.
 
 There are no screenshots or demo assets in the repository yet.
 
 ## Architecture
 
 - **Electron main process** owns the local FastAPI process, migrations, backend requests, and approved filesystem operations.
-- **Electron preload** exposes a narrow, validated IPC API to the renderer.
-- **React renderer** provides project management, planning, the workspace file tree and editor, local context search, settings, and assistant chat.
+- **Electron preload** exposes a narrow, validated IPC API to the renderer, including project-scoped terminal session controls.
+- **React renderer** provides project management, planning, the workspace file tree and editor, local context search, settings, assistant chat, and reviewed command execution.
 - **FastAPI backend** provides the versioned API, OpenAI provider adapter, conversation and project services, and persistence.
 - **SQLite and Alembic** store project records, plans, context chunks, indexing state, conversations, and visible messages. Migrations are applied by Electron at startup.
 - Change proposals and their lifecycle are stored in SQLite. Electron is the only proposal-driven file writer and requires an approved proposal plus the currently confirmed project folder.
@@ -71,6 +72,8 @@ The example contains only empty/safe values. Keep real credentials in `backend/.
 
 The backend reads `BUILDX_*` environment variables. `backend/.env.example` documents the provider settings.
 
+The terminal process manager also accepts `BUILDX_TERMINAL_TIMEOUT_MS` (default 300000; 1000–1800000), `BUILDX_TERMINAL_MAX_CONCURRENCY` (default 2; 1–4), and `BUILDX_TERMINAL_MAX_OUTPUT_BYTES` (default 524288; 16384–2097152).
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `BUILDX_AI_PROVIDER` | `openai` | The only provider currently implemented. |
@@ -84,6 +87,10 @@ The backend reads `BUILDX_*` environment variables. `backend/.env.example` docum
 | `BUILDX_BACKEND_DIR` | repository `backend/` directory | Optional backend source directory override, primarily for development or packaging. |
 
 When run outside Electron, the default SQLite database is stored under macOS `~/Library/Application Support/BUILDX`, Windows `%APPDATA%/BUILDX`, or Linux `$XDG_DATA_HOME/buildx` (default `~/.local/share/buildx`).
+
+## Project terminal
+
+The Terminal tab runs a command only after the user reviews its exact text and project directory, then explicitly selects Run. Commands execute through the system shell with a filtered environment, no interactive stdin, and no PTY on macOS, Linux, and Windows. This is a local command runner, not a security sandbox: shell commands can still access the user's files and available tools. BUILDX applies a five-minute default timeout, at most two concurrent commands, and a 512 KiB output cap per session; environment variables can adjust those limits within the documented bounds. Output is rendered as text. Stop requests target the process group on macOS/Linux and the shell process on Windows; deliberately detached descendants may outlive Stop, and Windows descendant cleanup is not guaranteed. The last 20 completed sessions are kept in memory; app shutdown requests termination of active commands.
 
 ## Checks
 

@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
+const { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, TERMINAL_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
 const APP_INFO_CHANNEL = 'app:get-info';
 
 function makeIpc() {
@@ -14,6 +14,29 @@ function makeIpc() {
 }
 
 describe('privileged IPC validation', () => {
+  it('starts only an exact reviewed command and scopes list/stop to one project', async () => {
+    const { ipcMain, handlers } = makeIpc();
+    const startTerminalProcess = vi.fn().mockResolvedValue({ id: 'session' });
+    const listTerminalProcesses = vi.fn().mockResolvedValue({ sessions: [], limits: {} });
+    const stopTerminalProcess = vi.fn().mockResolvedValue({ accepted: true });
+    registerIpcHandlers({ ipcMain, validateSender: vi.fn(), getAppInfo: vi.fn(),
+      startTerminalProcess, listTerminalProcesses, stopTerminalProcess });
+    const event = { senderFrame: { url: 'file:///app/index.html' } };
+    const project = '550e8400-e29b-41d4-a716-446655440000';
+    const requestId = '550e8400-e29b-41d4-a716-446655440001';
+    const sessionId = '550e8400-e29b-41d4-a716-446655440002';
+    const payload = { command: 'npm run dev', request_id: requestId,
+      approval: { project_id: project, command: 'npm run dev', working_directory: '/project' } };
+    await expect(handlers.get(TERMINAL_CHANNELS.start)(event, project, payload)).resolves.toEqual({ id: 'session' });
+    await expect(handlers.get(TERMINAL_CHANNELS.list)(event, project)).resolves.toMatchObject({ sessions: [] });
+    await expect(handlers.get(TERMINAL_CHANNELS.stop)(event, project, sessionId)).resolves.toEqual({ accepted: true });
+    expect(() => handlers.get(TERMINAL_CHANNELS.start)(event, project, { ...payload, command: 'npm test' })).toThrow(/review/i);
+    expect(() => handlers.get(TERMINAL_CHANNELS.stop)(event, project, '../other')).toThrow(/identifier/i);
+    expect(startTerminalProcess).toHaveBeenCalledExactlyOnceWith(project, payload);
+    expect(listTerminalProcesses).toHaveBeenCalledExactlyOnceWith(project);
+    expect(stopTerminalProcess).toHaveBeenCalledExactlyOnceWith(project, sessionId);
+  });
+
   it('exposes only validated project-scoped conversation actions', async () => {
     const { ipcMain, handlers } = makeIpc();
     const createConversation = vi.fn().mockResolvedValue({ id: 'conversation' });

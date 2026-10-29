@@ -9,6 +9,7 @@ const { createContextApi } = require('./context-api.cjs');
 const { createContextIndexer } = require('./context-indexer.cjs');
 const { createConversationApi } = require('./conversation-api.cjs');
 const { createChangeProposalApi } = require('./change-proposal-api.cjs');
+const { createTerminalProcesses } = require('./terminal-processes.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
 const {
@@ -39,6 +40,12 @@ const workspaceFiles = createWorkspaceFiles();
 const contextApi = createContextApi({ getBaseUrl: () => backendBaseUrl });
 const conversationApi = createConversationApi({ getBaseUrl: () => backendBaseUrl });
 const changeProposalApi = createChangeProposalApi({ getBaseUrl: () => backendBaseUrl });
+const terminalProcesses = createTerminalProcesses({
+  getProjectRoot: (projectId) => workspaceFiles.getAuthorizedDirectory(projectApi, projectId),
+  emit: (event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:event', event);
+  },
+});
 const contextIndexer = createContextIndexer({ workspaceFiles, projectApi, contextApi });
 
 function isTrustedUrl(value) {
@@ -88,6 +95,9 @@ registerIpcHandlers({
       throw error;
     }
   },
+  startTerminalProcess: (projectId, payload) => terminalProcesses.start({ ...payload, projectId }),
+  listTerminalProcesses: (projectId) => ({ sessions: terminalProcesses.list(projectId), limits: terminalProcesses.limits }),
+  stopTerminalProcess: (projectId, sessionId) => terminalProcesses.stop(projectId, sessionId),
   refreshProjectIndex: (projectId) => contextIndexer.refresh(projectId),
   getProjectIndexStatus: (projectId) => contextApi.getIndexStatus(projectId),
   listProjectIndexedFiles: (projectId) => contextApi.listIndexedFiles(projectId, { limit: 200 }),
@@ -237,7 +247,16 @@ if (!hasSingleInstance) {
     if (process.platform !== 'darwin') app.quit();
   });
 
-  app.on('before-quit', () => {
+  let terminalShutdownComplete = false;
+  app.on('before-quit', (event) => {
+    if (!terminalShutdownComplete) {
+      event.preventDefault();
+      terminalProcesses.shutdown().finally(() => {
+        terminalShutdownComplete = true;
+        app.quit();
+      });
+      return;
+    }
     if (backendProcess && !backendProcess.killed) backendProcess.kill();
   });
 }

@@ -40,4 +40,13 @@ contextBridge.exposeInMainWorld('buildxDesktop', Object.freeze({
   approveChangeProposal: (projectId, proposalId) => ipcRenderer.invoke('proposals:approve', projectId, proposalId),
   rejectChangeProposal: (projectId, proposalId) => ipcRenderer.invoke('proposals:reject', projectId, proposalId),
   applyApprovedChangeProposal: (projectId, proposalId) => ipcRenderer.invoke('proposals:apply', projectId, proposalId),
+  startTerminalProcess: (projectId, payload) => ipcRenderer.invoke('terminal:start', projectId, payload),
+  listTerminalProcesses: (projectId) => ipcRenderer.invoke('terminal:list', projectId),
+  stopTerminalProcess: (projectId, sessionId) => ipcRenderer.invoke('terminal:stop', projectId, sessionId),
+  onTerminalEvent: (callback) => {
+    if (typeof callback !== 'function') throw new TypeError('A terminal event callback is required.');
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('terminal:event', listener);
+    return () => ipcRenderer.removeListener('terminal:event', listener);
+  },
 }));

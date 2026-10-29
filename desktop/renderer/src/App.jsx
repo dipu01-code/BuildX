@@ -4,6 +4,7 @@ import AISettings from './AISettings.jsx';
 import ProjectPlanner from './ProjectPlanner.jsx';
 import ProjectContextPanel from './ProjectContextPanel.jsx';
 import ProjectAssistantPanel from './ProjectAssistantPanel.jsx';
+import TerminalPanel from './TerminalPanel.jsx';
 
 const CodeEditor = lazy(() => import('./CodeEditor.jsx'));
 
@@ -342,8 +343,9 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection 
     <div className="workspace-explorer-heading"><div><span className="eyebrow">PROJECT WORKSPACE</span><h1>{project.name}</h1><p className="workspace-root-path">{project.root_path}</p></div><div className="workspace-explorer-actions"><Button className="quiet-button" onClick={() => loadDirectory('', { initial: true })}>Refresh</Button><Button className="quiet-button" onClick={onChangeFolder}>Change folder</Button><Button className="quiet-button" onClick={leaveWorkspace}>Back to project</Button></div></div>
     <div className="workspace-operation-bar"><Button className="primary-button" onClick={() => { setDialog('file'); setDialogValue(''); }}>New file</Button><Button className="quiet-button" onClick={() => { setDialog('folder'); setDialogValue(''); }}>New folder</Button>{selected && selected.type !== 'symlink' && <><Button className="quiet-button" onClick={() => { setDialog('move'); setDialogValue(selected.path); }}>Rename / move</Button><Button className="danger-button" onClick={() => setDeleteTarget(selected)}>Delete</Button></>}</div>
     {error && <div className="project-error" role="alert"><span>{error}</span><Button className="quiet-button" onClick={() => loadDirectory('')}>Retry</Button></div>}
-    <Tabs tabs={['Files', 'Context', 'Assistant']} activeTab={workspaceView} label="Project workspace views" onSelect={setWorkspaceView} />
-    {workspaceView === 'Context' ? <ProjectContextPanel project={project} onOpenResult={openContextResult} />
+    <Tabs tabs={['Files', 'Context', 'Assistant', 'Terminal']} activeTab={workspaceView} label="Project workspace views" onSelect={setWorkspaceView} />
+    {workspaceView === 'Terminal' ? <TerminalPanel project={project} />
+      : workspaceView === 'Context' ? <ProjectContextPanel project={project} onOpenResult={openContextResult} />
       : workspaceView === 'Assistant' ? <ProjectAssistantPanel project={project} onOpenSource={openContextResult} />
         : loading ? <p role="status" className="project-state">Loading project files…</p> : <div className="workspace-browser-layout">
       <section className="file-tree-panel" aria-label="Project file tree"><div className="file-tree-heading"><strong>FILES</strong><span>Project root</span></div>{rows.length ? <ul className="file-tree">{rows.map((entry) => <li key={entry.path} style={{ '--tree-depth': entry.depth }}><button type="button" className={`file-tree-row ${selected?.path === entry.path ? 'selected' : ''} ${entry.type === 'symlink' ? 'blocked' : ''}`} onClick={() => entry.type === 'directory' ? toggleFolder(entry) : selectEntry(entry)} aria-label={`${entry.type === 'directory' ? expanded.has(entry.path) ? 'Collapse' : 'Expand' : 'Select'} ${entry.name}`}><span className="tree-disclosure">{entry.type === 'directory' ? expanded.has(entry.path) ? '⌄' : '›' : ' '}</span><span aria-hidden="true">{entry.type === 'directory' ? '▰' : entry.type === 'symlink' ? '↗' : '▤'}</span><span>{entry.name}</span>{entry.type === 'file' && <small>{entry.size} B</small>}</button></li>)}</ul> : <p className="project-state">This folder is empty.</p>}</section>

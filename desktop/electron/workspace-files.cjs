@@ -145,6 +145,10 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
     return callback(root);
   }
 
+  async function getAuthorizedDirectory(projectApi, projectId) {
+    return getRoot(projectApi, projectId);
+  }
+
   async function list(projectApi, projectId, relativePath = '') {
     return withRoot(projectApi, projectId, async (root) => {
       const { target } = await resolvePath(root, relativePath, { allowRoot: true });
@@ -632,6 +636,7 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
   }
 
   return Object.freeze({
+    getAuthorizedDirectory: safeOperation(getAuthorizedDirectory),
     list: safeOperation(list),
     readText: safeOperation(readText),
     inspectProposalTarget: safeOperation(inspectProposalTarget),

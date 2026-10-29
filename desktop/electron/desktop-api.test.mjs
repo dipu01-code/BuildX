@@ -23,6 +23,7 @@ describe('preload desktop API', () => {
       'refreshProjectIndex', 'getProjectIndexStatus', 'listProjectIndexedFiles', 'searchProjectContext',
       'createConversation', 'listConversations', 'getConversation', 'sendConversationMessage', 'deleteConversation',
       'generateChangeProposal', 'listChangeProposals', 'getChangeProposal', 'approveChangeProposal', 'rejectChangeProposal', 'applyApprovedChangeProposal',
+      'startTerminalProcess', 'listTerminalProcesses', 'stopTerminalProcess', 'onTerminalEvent',
     ]);
     await api.getAppInfo();
     expect(invoke).toHaveBeenCalledExactlyOnceWith('app:get-info');

@@ -480,3 +480,26 @@ button.starter-item:hover { background: rgba(255,255,255,.025); }
 .proposal-diff-context { display: block; color: #b7c2b9; }
 .proposal-history { display: grid; gap: .5rem; max-width: 48rem; margin-top: .9rem; }
 .proposal-history select { padding: .55rem; color: inherit; background: #101511; border: 1px solid #455247; border-radius: 7px; }
+.terminal-panel { display: grid; gap: 1rem; min-height: 30rem; padding: 1rem 0; }
+.terminal-heading, .terminal-command-actions, .terminal-process-bar { display: flex; align-items: center; justify-content: space-between; gap: .85rem; flex-wrap: wrap; }
+.terminal-heading h2 { margin: .3rem 0; }
+.terminal-heading p, .terminal-limits, .terminal-command-actions span { color: var(--muted, #a0aca1); font-size: .88rem; }
+.terminal-command-form, .terminal-review { display: grid; gap: .6rem; padding: 1rem; border: 1px solid #39443b; border-radius: 10px; background: #151b16; }
+.terminal-command-form textarea { width: 100%; padding: .8rem; color: #e5eee6; background: #0d120e; border: 1px solid #455247; border-radius: 7px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.terminal-command-actions span { max-width: 44rem; }
+.terminal-review { border-color: #889b68; }
+.terminal-review h3 { margin: 0; }
+.terminal-review dl { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .5rem; margin: 0; }
+.terminal-review dt { color: #aab7ad; }
+.terminal-review dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.terminal-review pre, .terminal-output pre { margin: .4rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.terminal-process-bar { justify-content: flex-start; padding: .75rem; border: 1px solid #39443b; border-radius: 8px; }
+.terminal-process-bar select { flex: 1 1 16rem; min-width: 10rem; padding: .55rem; color: inherit; background: #101511; border: 1px solid #455247; border-radius: 7px; }
+.terminal-status { margin-right: auto; font-variant-numeric: tabular-nums; }
+.terminal-status.running { color: #d7e890; }
+.terminal-status.succeeded { color: #addd9a; }
+.terminal-status.failed, .terminal-status.timed_out { color: #ffb4a8; }
+.terminal-output { min-height: 15rem; max-height: 42rem; overflow: auto; padding: 1rem; color: #dce4da; background: #0d120e; border: 1px solid #344036; border-radius: 8px; }
+.terminal-output section + section { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid #2c362e; }
+.terminal-output h3 { margin: 0; color: #a9c496; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
+.terminal-error { padding: .7rem .85rem; color: #ffd0c8; background: #3b201e; border: 1px solid #74403a; border-radius: 7px; }
