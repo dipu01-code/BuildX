@@ -10,6 +10,7 @@ const { createContextIndexer } = require('./context-indexer.cjs');
 const { createConversationApi } = require('./conversation-api.cjs');
 const { createChangeProposalApi } = require('./change-proposal-api.cjs');
 const { createTerminalProcesses } = require('./terminal-processes.cjs');
+const { createTestCommandDiscovery } = require('./test-command-discovery.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
 const {
@@ -45,6 +46,9 @@ const terminalProcesses = createTerminalProcesses({
   emit: (event) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal:event', event);
   },
+});
+const testCommandDiscovery = createTestCommandDiscovery({
+  getProjectRoot: (projectId) => workspaceFiles.getAuthorizedDirectory(projectApi, projectId),
 });
 const contextIndexer = createContextIndexer({ workspaceFiles, projectApi, contextApi });
 
@@ -98,6 +102,11 @@ registerIpcHandlers({
   startTerminalProcess: (projectId, payload) => terminalProcesses.start({ ...payload, projectId }),
   listTerminalProcesses: (projectId) => ({ sessions: terminalProcesses.list(projectId), limits: terminalProcesses.limits }),
   stopTerminalProcess: (projectId, sessionId) => terminalProcesses.stop(projectId, sessionId),
+  discoverTestCommands: (projectId) => testCommandDiscovery.discover(projectId),
+  startTestProcess: (projectId, payload) => terminalProcesses.start({
+    projectId, command: payload.command, requestId: payload.request_id, approval: payload.approval,
+    purpose: 'test', configurationSource: payload.configuration_source, testRunner: payload.runner,
+  }),
   refreshProjectIndex: (projectId) => contextIndexer.refresh(projectId),
   getProjectIndexStatus: (projectId) => contextApi.getIndexStatus(projectId),
   listProjectIndexedFiles: (projectId) => contextApi.listIndexedFiles(projectId, { limit: 200 }),

@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, TERMINAL_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
+const { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, TERMINAL_CHANNELS, TESTING_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers } = require('./ipc.cjs');
 const APP_INFO_CHANNEL = 'app:get-info';
 
 function makeIpc() {
@@ -14,6 +14,33 @@ function makeIpc() {
 }
 
 describe('privileged IPC validation', () => {
+  it('discovers test commands only for a validated project identifier', async () => {
+    const { ipcMain, handlers } = makeIpc();
+    const discoverTestCommands = vi.fn().mockResolvedValue({ commands: [], issues: [] });
+    registerIpcHandlers({ ipcMain, validateSender: vi.fn(), getAppInfo: vi.fn(), discoverTestCommands });
+    const event = { senderFrame: { url: 'file:///app/index.html' } };
+    const project = '550e8400-e29b-41d4-a716-446655440000';
+    await expect(handlers.get(TESTING_CHANNELS.discover)(event, project)).resolves.toEqual({ commands: [], issues: [] });
+    expect(discoverTestCommands).toHaveBeenCalledExactlyOnceWith(project);
+    expect(() => handlers.get(TESTING_CHANNELS.discover)(event, '../other')).toThrow(/identifier/i);
+  });
+
+  it('routes reviewed test runs through the process manager with source and runner bound to approval', async () => {
+    const { ipcMain, handlers } = makeIpc();
+    const startTestProcess = vi.fn().mockResolvedValue({ id: 'session', purpose: 'test' });
+    registerIpcHandlers({ ipcMain, validateSender: vi.fn(), getAppInfo: vi.fn(), startTestProcess });
+    const event = { senderFrame: { url: 'file:///app/index.html' } };
+    const project = '550e8400-e29b-41d4-a716-446655440000';
+    const payload = { command: 'npm test', request_id: '550e8400-e29b-41d4-a716-446655440001',
+      configuration_source: 'package.json scripts.test', runner: 'vitest',
+      approval: { project_id: project, command: 'npm test', working_directory: '/project',
+        source: 'package.json scripts.test', runner: 'vitest' } };
+    await expect(handlers.get(TESTING_CHANNELS.start)(event, project, payload)).resolves.toMatchObject({ purpose: 'test' });
+    expect(startTestProcess).toHaveBeenCalledExactlyOnceWith(project, payload);
+    expect(() => handlers.get(TESTING_CHANNELS.start)(event, project, { ...payload,
+      approval: { ...payload.approval, source: 'other config' } })).toThrow(/review/i);
+  });
+
   it('starts only an exact reviewed command and scopes list/stop to one project', async () => {
     const { ipcMain, handlers } = makeIpc();
     const startTerminalProcess = vi.fn().mockResolvedValue({ id: 'session' });

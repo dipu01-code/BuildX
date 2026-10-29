@@ -63,6 +63,19 @@ describe('approved terminal process manager', () => {
     expect(child).toBeDefined();
   });
 
+  it('records test-run metadata and binds runner/configuration source to approval', async () => {
+    const { manager, launch } = await makeManager();
+    const command = 'npm test';
+    const source = 'package.json scripts.test';
+    const runner = 'vitest';
+    const approval = { project_id: projectId, command, working_directory: projectRoot, source, runner };
+    const session = await manager.start({ projectId, command, requestId, approval, purpose: 'test', configurationSource: source, testRunner: runner });
+    expect(session).toMatchObject({ purpose: 'test', configuration_source: source, test_runner: runner });
+    await expect(manager.start({ projectId, command: 'npm test', requestId: '550e8400-e29b-41d4-a716-446655440003',
+      approval, purpose: 'test', configurationSource: source, testRunner: 'jest' })).rejects.toThrow(/changed after review/i);
+    expect(launch).toHaveBeenCalledOnce();
+  });
+
   it('rejects empty commands and approvals bound to a different command or project directory', async () => {
     const { manager, launch } = await makeManager();
     await expect(manager.start({ projectId, command: '  ', requestId, approval: {} })).rejects.toThrow(/1 to 4000/i);
@@ -83,6 +96,18 @@ describe('approved terminal process manager', () => {
     expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'status', session: expect.objectContaining({ status: 'failed', exit_code: 7 }) }));
   });
 
+  it('coalesces small output bursts and flushes all buffered text before the trusted exit event', async () => {
+    const { manager, child, emit } = await makeManager();
+    const command = 'quiet writes';
+    await manager.start({ projectId, command, requestId, approval: { project_id: projectId, command, working_directory: projectRoot } });
+    child.stdout.emit('data', 'first ');
+    child.stdout.emit('data', 'second');
+    expect(emit.mock.calls.filter(([event]) => event.type === 'output')).toHaveLength(0);
+    child.emit('close', 0, null);
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'output', stream: 'stdout', data: 'first second' }));
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'status', session: expect.objectContaining({ status: 'succeeded' }) }));
+  });
+
   it('bounds retained output and emits a truncation marker', async () => {
     const { manager, child, emit } = await makeManager({ limits: { timeoutMs: 60_000, maxConcurrent: 2, maxOutputBytes: 16 * 1024 } });
     const command = 'large output';
@@ -101,6 +126,7 @@ describe('approved terminal process manager', () => {
     const approval = { project_id: projectId, command, working_directory: projectRoot };
     const first = await manager.start({ projectId, command, requestId, approval });
     await expect(manager.start({ projectId, command, requestId, approval })).resolves.toMatchObject({ id: first.id });
+    await expect(manager.start({ projectId, command, requestId, approval: { ...approval, working_directory: '/different/project' } })).rejects.toThrow(/changed after review/i);
     expect(() => manager.stop('550e8400-e29b-41d4-a716-446655440002', first.id)).toThrow(/not found/i);
     expect(launch).toHaveBeenCalledOnce();
   });

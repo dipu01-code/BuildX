@@ -49,4 +49,6 @@ contextBridge.exposeInMainWorld('buildxDesktop', Object.freeze({
     ipcRenderer.on('terminal:event', listener);
     return () => ipcRenderer.removeListener('terminal:event', listener);
   },
+  discoverTestCommands: (projectId) => ipcRenderer.invoke('testing:discover', projectId),
+  startTestProcess: (projectId, payload) => ipcRenderer.invoke('testing:start', projectId, payload),
 }));

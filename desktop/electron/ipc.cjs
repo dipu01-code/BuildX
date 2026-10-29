@@ -40,6 +40,7 @@ const PROPOSAL_CHANNELS = Object.freeze({
 const TERMINAL_CHANNELS = Object.freeze({
   start: 'terminal:start', list: 'terminal:list', stop: 'terminal:stop',
 });
+const TESTING_CHANNELS = Object.freeze({ discover: 'testing:discover', start: 'testing:start' });
 const PLANNER_CHANNELS = Object.freeze({
   generate: 'plans:generate', list: 'plans:list', get: 'plans:get', save: 'plans:save', update: 'plans:update', delete: 'plans:delete',
 });
@@ -91,6 +92,8 @@ function registerIpcHandlers({
   createConversation, listConversations, getConversation, sendConversationMessage, deleteConversation,
   generateProposal, listProposals, getProposal, approveProposal, rejectProposal, applyApprovedChangeProposal,
   startTerminalProcess, listTerminalProcesses, stopTerminalProcess,
+  discoverTestCommands,
+  startTestProcess,
 }) {
   ipcMain.handle(APP_INFO_CHANNEL, (event, ...args) => {
     validateSender(event);
@@ -171,6 +174,33 @@ function registerIpcHandlers({
     if (args.length !== 2) throw new TypeError('terminal:stop requires a project and process session identifier.');
     validateProjectId(args[0]); validateProjectId(args[1]);
     return stopTerminalProcess(args[0], args[1]);
+  });
+
+  ipcMain.handle(TESTING_CHANNELS.discover, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 1) throw new TypeError('testing:discover requires one project identifier.');
+    validateProjectId(args[0]);
+    return discoverTestCommands(args[0]);
+  });
+
+  ipcMain.handle(TESTING_CHANNELS.start, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 2) throw new TypeError('testing:start requires a project identifier and reviewed test command.');
+    validateProjectId(args[0]);
+    const payload = args[1];
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || typeof payload.command !== 'string' || !payload.command.trim() || payload.command.length > 4000
+      || typeof payload.request_id !== 'string' || !PROJECT_ID_PATTERN.test(payload.request_id)
+      || typeof payload.configuration_source !== 'string' || !payload.configuration_source.trim() || payload.configuration_source.length > 300
+      || typeof payload.runner !== 'string' || !payload.runner.trim() || payload.runner.length > 60
+      || !payload.approval || typeof payload.approval !== 'object' || Array.isArray(payload.approval)
+      || payload.approval.project_id !== args[0] || payload.approval.command !== payload.command
+      || payload.approval.source !== payload.configuration_source
+      || payload.approval.runner !== payload.runner
+      || typeof payload.approval.working_directory !== 'string' || payload.approval.working_directory.length > 4096) {
+      throw new TypeError('Review the exact test command, source, and project directory before running it.');
+    }
+    return startTestProcess(args[0], payload);
   });
 
   ipcMain.handle(PROJECT_CHANNELS.list, (event, ...args) => {
@@ -337,4 +367,4 @@ function registerIpcHandlers({
   });
 }
 
-module.exports = { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, TERMINAL_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };
+module.exports = { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, TERMINAL_CHANNELS, TESTING_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };

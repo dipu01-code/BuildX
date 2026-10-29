@@ -72,6 +72,7 @@ def test_generation_persists_immutable_one_file_proposal_and_context(proposal_cl
     assert proposal["status"] == "pending_review"
     assert proposal["operation"]["original_content"] == body["original_content"]
     assert "untrusted data" in provider.requests[0].instruction
+    assert "diagnostic evidence" in provider.requests[0].instruction
     assert client.get(f"/api/v1/projects/{project['id']}/change-proposals").json()["proposals"][0]["id"] == proposal["id"]
     approve = client.post(f"/api/v1/change-proposals/{proposal['id']}/approve")
     assert approve.status_code == 200 and approve.json()["status"] == "approved"

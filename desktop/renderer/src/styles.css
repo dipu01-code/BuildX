@@ -503,3 +503,31 @@ button.starter-item:hover { background: rgba(255,255,255,.025); }
 .terminal-output section + section { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid #2c362e; }
 .terminal-output h3 { margin: 0; color: #a9c496; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
 .terminal-error { padding: .7rem .85rem; color: #ffd0c8; background: #3b201e; border: 1px solid #74403a; border-radius: 7px; }
+.testing-panel { display: grid; gap: 1rem; min-height: 30rem; padding: 1rem 0; }
+.testing-heading, .testing-results-heading, .testing-run-state { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; }
+.testing-heading h2, .testing-discovery h3, .testing-results h3 { margin: .3rem 0; }
+.testing-heading p, .testing-command-source, .testing-debug > p, .testing-proposal-form > p, .testing-unparsed { color: var(--muted, #a0aca1); font-size: .9rem; }
+.testing-discovery, .testing-results, .testing-analysis, .testing-proposal-form { display: grid; gap: .8rem; }
+.testing-discovery { padding: 1rem; border: 1px solid #39443b; border-radius: 10px; background: #151b16; }
+.testing-discovery label, .testing-results-heading label, .testing-proposal-form label { display: grid; gap: .45rem; }
+.testing-discovery select, .testing-results-heading select, .testing-proposal-form input { width: 100%; min-width: 12rem; padding: .55rem; color: inherit; background: #101511; border: 1px solid #455247; border-radius: 7px; }
+.testing-command-source, .testing-discovery-issue { margin: 0; }
+.testing-results { padding: 1rem; border: 1px solid #39443b; border-radius: 10px; background: #121713; }
+.testing-results-heading select { margin-top: .35rem; }
+.testing-run-state { justify-content: flex-start; }
+.testing-counts { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; }
+.testing-counts div { min-width: 5rem; padding: .55rem .7rem; border: 1px solid #39443b; border-radius: 7px; }
+.testing-counts dt { color: #aab7ad; font-size: .75rem; text-transform: uppercase; }
+.testing-counts dd { margin: .2rem 0 0; font-variant-numeric: tabular-nums; }
+.testing-output { max-height: 34rem; }
+.testing-failures ul, .testing-analysis ul { display: grid; gap: .45rem; padding-left: 1.3rem; }
+.testing-failures li { display: grid; gap: .25rem; }
+.testing-failures li span { color: #ffb4a8; }
+.testing-debug { display: grid; gap: .6rem; padding: .9rem; border: 1px solid #536047; border-radius: 8px; }
+.testing-debug h4, .testing-analysis h4, .testing-proposal-form h5 { margin: 0; }
+.testing-analysis { padding-top: .8rem; border-top: 1px solid #39443b; }
+.testing-analysis p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.testing-analysis ul { margin: 0; }
+.source-reference { padding: 0; border: 0; color: #c5dc9a; background: transparent; text-decoration: underline; cursor: pointer; }
+.testing-proposal-form { padding: .8rem; border: 1px solid #39443b; border-radius: 8px; }
+.testing-proposal-created { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; padding: .7rem; border: 1px solid #52694d; border-radius: 7px; }

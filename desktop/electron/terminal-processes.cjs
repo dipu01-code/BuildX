@@ -6,6 +6,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const MAX_COMMAND_CHARS = 4000;
 const DEFAULT_RETAINED_SESSIONS = 20;
 const TERMINATE_GRACE_MS = 2000;
+const OUTPUT_FLUSH_INTERVAL_MS = 40;
+const OUTPUT_FLUSH_MAX_BYTES = 16 * 1024;
 
 function boundedInteger(value, fallback, minimum, maximum) {
   const parsed = Number.parseInt(value, 10);
@@ -56,6 +58,7 @@ function createTerminalProcesses({
     const elapsed = (session.endedAt ?? now()) - session.startedAt;
     return {
       id: session.id, project_id: session.projectId, command: session.command,
+      purpose: session.purpose, configuration_source: session.configurationSource, test_runner: session.testRunner,
       working_directory: session.cwd, status: session.status, exit_code: session.exitCode,
       termination_reason: session.terminationReason, created_at: session.createdAt,
       started_at: session.startedAtISO, ended_at: session.endedAtISO,
@@ -90,15 +93,33 @@ function createTerminalProcesses({
     if (accepted) {
       session[stream] += accepted;
       session.outputBytes += acceptedBytes;
-      publish(session, { type: 'output', stream, data: accepted });
+      session.pendingOutput[stream] += accepted;
+      session.pendingOutputBytes += acceptedBytes;
+      if (session.pendingOutputBytes >= OUTPUT_FLUSH_MAX_BYTES) flushOutput(session);
+      else if (!session.outputFlushHandle) {
+        session.outputFlushHandle = setTimeout(() => flushOutput(session), OUTPUT_FLUSH_INTERVAL_MS);
+        session.outputFlushHandle.unref?.();
+      }
     }
     if (acceptedBytes < bytes && !session.outputTruncated) {
+      flushOutput(session);
       session.outputTruncated = true;
       session.stderr += marker;
       session.outputBytes += Buffer.byteLength(marker, 'utf8');
       publish(session, { type: 'output', stream: 'system', data: marker });
       publish(session, { type: 'truncated' });
     }
+  }
+
+  function flushOutput(session) {
+    clearTimeout(session.outputFlushHandle);
+    session.outputFlushHandle = null;
+    for (const stream of ['stdout', 'stderr']) {
+      const data = session.pendingOutput[stream];
+      if (data) publish(session, { type: 'output', stream, data });
+      session.pendingOutput[stream] = '';
+    }
+    session.pendingOutputBytes = 0;
   }
 
   function signal(session, name) {
@@ -119,6 +140,7 @@ function createTerminalProcesses({
     clearTimeout(session.killHandle);
     session.exitCode = Number.isInteger(code) ? code : null;
     if (spawnError) append(session, 'stderr', 'BUILDX could not start the system command shell. Check the local shell installation and try again.\n');
+    flushOutput(session);
     session.endedAt = now();
     session.endedAtISO = new Date(session.endedAt).toISOString();
     if (session.timedOut) {
@@ -147,21 +169,17 @@ function createTerminalProcesses({
     return { executable: '/bin/sh', args: ['-c', command] };
   }
 
-  async function start({ projectId, command, requestId, approval }) {
+  async function start({ projectId, command, requestId, approval, purpose = 'command', configurationSource = null, testRunner = null }) {
     if (typeof projectId !== 'string' || !UUID_PATTERN.test(projectId)) throw new TypeError('A valid project identifier is required.');
     if (typeof requestId !== 'string' || !UUID_PATTERN.test(requestId)) throw new TypeError('A valid terminal request identifier is required.');
+    if (!['command', 'test'].includes(purpose) || (purpose === 'test'
+      && (typeof configurationSource !== 'string' || !configurationSource.trim() || configurationSource.length > 300
+        || typeof testRunner !== 'string' || !testRunner.trim() || testRunner.length > 60))) {
+      throw new TypeError('The test run configuration source is invalid.');
+    }
     if (typeof command !== 'string' || !command.trim() || command.length > MAX_COMMAND_CHARS || command.includes('\0')) {
       throw new TypeError(`Enter a command of 1 to ${MAX_COMMAND_CHARS} characters.`);
     }
-    const existingId = requests.get(requestId);
-    if (existingId) {
-      const existing = sessions.get(existingId);
-      if (existing?.projectId === projectId && existing.command === command) return snapshot(existing);
-      throw new Error('This terminal request identifier was already used for a different command.');
-    }
-    const activeCount = [...sessions.values()].filter((session) => session.endedAt === null).length;
-    if (activeCount >= limits.maxConcurrent) throw new Error(`BUILDX allows up to ${limits.maxConcurrent} running terminal processes.`);
-
     let root;
     try {
       root = await getProjectRoot(projectId);
@@ -169,7 +187,8 @@ function createTerminalProcesses({
       const info = await fsImpl.stat(canonical);
       if (!info.isDirectory() || canonical !== root) throw new Error('invalid root');
       if (!approval || approval.project_id !== projectId || approval.command !== command
-        || approval.working_directory !== canonical) {
+        || approval.working_directory !== canonical || (purpose === 'test'
+          && (approval.source !== configurationSource || approval.runner !== testRunner))) {
         throw new Error('The command or project directory changed after review. Review it again before running.');
       }
       root = canonical;
@@ -178,13 +197,24 @@ function createTerminalProcesses({
       throw new Error('BUILDX could not confirm the selected project folder. Choose the project folder again before running a command.');
     }
 
+    const existingId = requests.get(requestId);
+    if (existingId) {
+      const existing = sessions.get(existingId);
+      if (existing?.projectId === projectId && existing.command === command && existing.cwd === root
+        && existing.purpose === purpose && existing.configurationSource === configurationSource && existing.testRunner === testRunner) return snapshot(existing);
+      throw new Error('This terminal request identifier was already used for a different command or configuration.');
+    }
+    const activeCount = [...sessions.values()].filter((session) => session.endedAt === null).length;
+    if (activeCount >= limits.maxConcurrent) throw new Error(`BUILDX allows up to ${limits.maxConcurrent} running terminal processes.`);
+
     const invocation = shellInvocation(command);
     const createdAt = new Date(now()).toISOString();
     const session = {
-      id: crypto.randomUUID(), requestId, projectId, command, cwd: root,
+      id: crypto.randomUUID(), requestId, projectId, command, cwd: root, purpose, configurationSource, testRunner,
       createdAt, startedAt: now(), startedAtISO: new Date().toISOString(), endedAt: null,
       endedAtISO: null, status: 'running', exitCode: null, terminationReason: null,
       stdout: '', stderr: '', outputBytes: 0, outputTruncated: false,
+      pendingOutput: { stdout: '', stderr: '' }, pendingOutputBytes: 0, outputFlushHandle: null,
       stopRequested: false, timedOut: false, child: null, timeoutHandle: null, killHandle: null,
     };
     const options = {
