@@ -44,6 +44,12 @@ const TESTING_CHANNELS = Object.freeze({ discover: 'testing:discover', start: 't
 const PLANNER_CHANNELS = Object.freeze({
   generate: 'plans:generate', list: 'plans:list', get: 'plans:get', save: 'plans:save', update: 'plans:update', delete: 'plans:delete',
 });
+const SETTINGS_CHANNELS = Object.freeze({
+  get: 'settings:get',
+  patch: 'settings:patch',
+  reset: 'settings:reset',
+  health: 'settings:health',
+});
 
 const PROJECT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PROJECT_FIELDS = new Set(['name', 'description', 'project_type']);
@@ -94,6 +100,7 @@ function registerIpcHandlers({
   startTerminalProcess, listTerminalProcesses, stopTerminalProcess,
   discoverTestCommands,
   startTestProcess,
+  getSettings, patchSettings, resetSettings, getSettingsHealth,
 }) {
   ipcMain.handle(APP_INFO_CHANNEL, (event, ...args) => {
     validateSender(event);
@@ -201,6 +208,34 @@ function registerIpcHandlers({
       throw new TypeError('Review the exact test command, source, and project directory before running it.');
     }
     return startTestProcess(args[0], payload);
+  });
+
+  ipcMain.handle(SETTINGS_CHANNELS.get, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 0) throw new TypeError('settings:get does not accept arguments.');
+    return getSettings();
+  });
+
+  ipcMain.handle(SETTINGS_CHANNELS.patch, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 1) throw new TypeError('settings:patch requires one settings object.');
+    const patch = args[0];
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+      throw new TypeError('Settings patch data must be an object.');
+    }
+    return patchSettings(patch);
+  });
+
+  ipcMain.handle(SETTINGS_CHANNELS.reset, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 0) throw new TypeError('settings:reset does not accept arguments.');
+    return resetSettings();
+  });
+
+  ipcMain.handle(SETTINGS_CHANNELS.health, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 0) throw new TypeError('settings:health does not accept arguments.');
+    return getSettingsHealth();
   });
 
   ipcMain.handle(PROJECT_CHANNELS.list, (event, ...args) => {

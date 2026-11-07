@@ -1,0 +1,23 @@
+{
+  "id": "binary-search",
+  "title": "Binary Search",
+  "description": "Given a sorted array of integers `nums` and an integer `target`, return the index of `target` if it exists in `nums`, otherwise -1.",
+  "topic": "arrays",
+  "difficulty": "medium",
+  "testCases": [
+    { "input": { "nums": [-1, 0, 3, 5, 9, 12], "target": 9 }, "expected": 4, "description": "target present" },
+    { "input": { "nums": [-1, 0, 3, 5, 9, 12], "target": 2 }, "expected": -1, "description": "target absent" },
+    { "input": { "nums": [5], "target": 5 }, "expected": 0, "description": "single element match" }
+  ],
+  "hints": [
+    { "level": 1, "text": "Keep a low and high index and repeatedly inspect the middle element." },
+    { "level": 2, "text": "If the middle value is too high, search the left half; if too low, search the right half." },
+    { "level": 3, "text": "Stop when low exceeds high — the target is not in the array." }
+  ],
+  "solution": {
+    "language": "javascript",
+    "code": "function search(nums, target) {\n  let lo = 0, hi = nums.length - 1;\n  while (lo <= hi) {\n    const mid = Math.floor((lo + hi) / 2);\n    if (nums[mid] === target) return mid;\n    if (nums[mid] < target) lo = mid + 1; else hi = mid - 1;\n  }\n  return -1;\n}",
+    "explanation": "Classic binary search on a sorted array.",
+    "complexity": { "time": "O(log n)", "space": "O(1)" }
+  }
+}

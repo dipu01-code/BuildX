@@ -13,6 +13,7 @@ const { createTerminalProcesses } = require('./terminal-processes.cjs');
 const { createTestCommandDiscovery } = require('./test-command-discovery.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
+const { createSettingsAPI } = require('./settings-api.cjs');
 const {
   createContentSecurityPolicy,
   isSafeExternalUrl,
@@ -41,6 +42,7 @@ const workspaceFiles = createWorkspaceFiles();
 const contextApi = createContextApi({ getBaseUrl: () => backendBaseUrl });
 const conversationApi = createConversationApi({ getBaseUrl: () => backendBaseUrl });
 const changeProposalApi = createChangeProposalApi({ getBaseUrl: () => backendBaseUrl });
+const settingsApi = createSettingsAPI({ getBaseUrl: () => backendBaseUrl });
 const terminalProcesses = createTerminalProcesses({
   getProjectRoot: (projectId) => workspaceFiles.getAuthorizedDirectory(projectApi, projectId),
   emit: (event) => {
@@ -109,6 +111,10 @@ registerIpcHandlers({
     projectId, command: payload.command, requestId: payload.request_id, approval: payload.approval,
     purpose: 'test', configurationSource: payload.configuration_source, testRunner: payload.runner,
   }),
+  getSettings: () => settingsApi.getSettings(),
+  patchSettings: (patch) => settingsApi.patchSettings(patch),
+  resetSettings: () => settingsApi.resetSettings(),
+  getSettingsHealth: () => settingsApi.getSettingsHealth(),
   refreshProjectIndex: (projectId) => contextIndexer.refresh(projectId),
   getProjectIndexStatus: (projectId) => contextApi.getIndexStatus(projectId),
   listProjectIndexedFiles: (projectId) => contextApi.listIndexedFiles(projectId, { limit: 200 }),

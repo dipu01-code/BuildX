@@ -1,0 +1,23 @@
+{
+  "id": "course-schedule",
+  "title": "Course Schedule",
+  "description": "There are `numCourses` courses labeled 0..n-1 and a list of prerequisite pairs. Return true if all courses can be finished (i.e. the prerequisite graph has no cycle), otherwise false.",
+  "topic": "graphs",
+  "difficulty": "hard",
+  "testCases": [
+    { "input": { "numCourses": 2, "prerequisites": [[1, 0]] }, "expected": true, "description": "single dependency chain is fine" },
+    { "input": { "numCourses": 2, "prerequisites": [[1, 0], [0, 1]] }, "expected": false, "description": "cycle between two courses" },
+    { "input": { "numCourses": 1, "prerequisites": [] }, "expected": true, "description": "no prerequisites" }
+  ],
+  "hints": [
+    { "level": 1, "text": "Model courses and prerequisites as a directed graph; a cycle means the schedule is impossible." },
+    { "level": 2, "text": "Detect a cycle with depth-first search using three node colors: unvisited, in progress, done." },
+    { "level": 3, "text": "If DFS reaches a node that is still in progress, a back edge (cycle) exists." }
+  ],
+  "solution": {
+    "language": "javascript",
+    "code": "function canFinish(numCourses, prerequisites) {\n  const graph = Array.from({ length: numCourses }, () => []);\n  for (const [a, b] of prerequisites) graph[b].push(a);\n  const state = new Uint8Array(numCourses); // 0=unvisited,1=in progress,2=done\n  const dfs = (u) => {\n    if (state[u] === 1) return false;\n    if (state[u] === 2) return true;\n    state[u] = 1;\n    for (const v of graph[u]) if (!dfs(v)) return false;\n    state[u] = 2;\n    return true;\n  };\n  for (let i = 0; i < numCourses; i++) if (!dfs(i)) return false;\n  return true;\n}",
+    "explanation": "Cycle detection via DFS coloring.",
+    "complexity": { "time": "O(V + E)", "space": "O(V + E)" }
+  }
+}

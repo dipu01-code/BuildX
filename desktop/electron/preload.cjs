@@ -51,4 +51,8 @@ contextBridge.exposeInMainWorld('buildxDesktop', Object.freeze({
   },
   discoverTestCommands: (projectId) => ipcRenderer.invoke('testing:discover', projectId),
   startTestProcess: (projectId, payload) => ipcRenderer.invoke('testing:start', projectId, payload),
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  patchSettings: (patch) => ipcRenderer.invoke('settings:patch', patch),
+  resetSettings: () => ipcRenderer.invoke('settings:reset'),
+  getSettingsHealth: () => ipcRenderer.invoke('settings:health'),
 }));

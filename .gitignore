@@ -55,3 +55,6 @@ htmlcov/
 .LSOverride
 .Spotlight-V100/
 .Trashes/
+
+# Graphify knowledge-graph outputs (never commit)
+graphify-out/

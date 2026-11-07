@@ -1,0 +1,23 @@
+{
+  "id": "valid-palindrome",
+  "title": "Valid Palindrome",
+  "description": "Given a string `s`, determine if it is a palindrome, considering only alphanumeric characters and ignoring cases.",
+  "topic": "strings",
+  "difficulty": "easy",
+  "testCases": [
+    { "input": { "s": "A man, a plan, a canal: Panama" }, "expected": true, "description": "classic palindrome with punctuation" },
+    { "input": { "s": "race a car" }, "expected": false, "description": "not a palindrome" },
+    { "input": { "s": "" }, "expected": true, "description": "empty string" }
+  ],
+  "hints": [
+    { "level": 1, "text": "Use two pointers, one from each end, and move inward." },
+    { "level": 2, "text": "Skip any character that is not a letter or digit." },
+    { "level": 3, "text": "Compare characters case-insensitively; if any pair differs, it is not a palindrome." }
+  ],
+  "solution": {
+    "language": "javascript",
+    "code": "function isPalindrome(s) {\n  s = s.toLowerCase();\n  let left = 0, right = s.length - 1;\n  while (left < right) {\n    if (!/[a-z0-9]/.test(s[left])) { left++; continue; }\n    if (!/[a-z0-9]/.test(s[right])) { right--; continue; }\n    if (s[left] !== s[right]) return false;\n    left++; right--;\n  }\n  return true;\n}",
+    "explanation": "Two pointers skipping non-alphanumeric characters.",
+    "complexity": { "time": "O(n)", "space": "O(1)" }
+  }
+}

@@ -15,7 +15,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes.router import api_router
 from app.core.config import Settings, get_settings
-from app.schemas.errors import ErrorBody, ErrorResponse, PlannerAPIError, safe_validation_details
+from app.core.logging import new_error_id
+from app.schemas.errors import ErrorBody, ErrorDetail, ErrorResponse, PlannerAPIError, safe_validation_details
 
 logger = logging.getLogger("buildx.api")
 
@@ -87,12 +88,27 @@ def create_app(settings: Settings | None = None, ai_provider: AIProvider | None 
 
     @application.exception_handler(Exception)
     async def unexpected_error_handler(request: Request, _exc: Exception) -> JSONResponse:
+        error_id = new_error_id()
         logger.error(
             "Unhandled request exception",
-            extra={"method": request.method, "path": request.url.path},
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "error_id": error_id,
+            },
         )
         payload = ErrorResponse(
-            error=ErrorBody(code="INTERNAL_SERVER_ERROR", message="An unexpected error occurred")
+            error=ErrorBody(
+                code="INTERNAL_SERVER_ERROR",
+                message="An unexpected error occurred.",
+                details=[
+                    ErrorDetail(
+                        location=["error"],
+                        message=f"Reference this support ID when contacting support: {error_id}",
+                        type="server_error",
+                    )
+                ],
+            ),
         )
         return JSONResponse(status_code=500, content=payload.model_dump(mode="json"))
 

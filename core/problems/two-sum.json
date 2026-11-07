@@ -1,0 +1,23 @@
+{
+  "id": "two-sum",
+  "title": "Two Sum",
+  "description": "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`. You may assume each input has exactly one solution.",
+  "topic": "arrays",
+  "difficulty": "easy",
+  "testCases": [
+    { "input": { "nums": [2, 7, 11, 15], "target": 9 }, "expected": [0, 1], "description": "first pair at the start" },
+    { "input": { "nums": [3, 2, 4], "target": 6 }, "expected": [1, 2], "description": "pair not involving the first element" },
+    { "input": { "nums": [3, 3], "target": 6 }, "expected": [0, 1], "description": "duplicate values" }
+  ],
+  "hints": [
+    { "level": 1, "text": "Try every pair of indices and check whether their values sum to the target." },
+    { "level": 2, "text": "Use a hash map from value to index so each lookup is O(1) instead of scanning again." },
+    { "level": 3, "text": "For each number x, check whether target - x was already seen; if so, return the stored index and the current one." }
+  ],
+  "solution": {
+    "language": "javascript",
+    "code": "function twoSum(nums, target) {\n  const seen = new Map();\n  for (let i = 0; i < nums.length; i++) {\n    const complement = target - nums[i];\n    if (seen.has(complement)) return [seen.get(complement), i];\n    seen.set(nums[i], i);\n  }\n  return [];\n}",
+    "explanation": "Single pass with a hash map storing value -> index.",
+    "complexity": { "time": "O(n)", "space": "O(n)" }
+  }
+}

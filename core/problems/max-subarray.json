@@ -1,0 +1,23 @@
+{
+  "id": "max-subarray",
+  "title": "Maximum Subarray",
+  "description": "Given an integer array `nums`, find the contiguous subarray (containing at least one number) with the largest sum and return its sum.",
+  "topic": "dynamic-programming",
+  "difficulty": "medium",
+  "testCases": [
+    { "input": { "nums": [-2, 1, -3, 4, -1, 2, 1, -5, 4] }, "expected": 6, "description": "subarray [4,-1,2,1]" },
+    { "input": { "nums": [1] }, "expected": 1, "description": "single element" },
+    { "input": { "nums": [5, 4, -1, 7, 8] }, "expected": 23, "description": "whole array" }
+  ],
+  "hints": [
+    { "level": 1, "text": "Track the best subarray sum ending at each position." },
+    { "level": 2, "text": "At position i, either extend the previous subarray or start fresh at nums[i]." },
+    { "level": 3, "text": "Kadane's recurrence: bestEndingHere = max(nums[i], bestEndingHere + nums[i]); answer is the max over all positions." }
+  ],
+  "solution": {
+    "language": "javascript",
+    "code": "function maxSubArray(nums) {\n  let best = nums[0], current = nums[0];\n  for (let i = 1; i < nums.length; i++) {\n    current = Math.max(nums[i], current + nums[i]);\n    best = Math.max(best, current);\n  }\n  return best;\n}",
+    "explanation": "Kadane's algorithm, one pass.",
+    "complexity": { "time": "O(n)", "space": "O(1)" }
+  }
+}

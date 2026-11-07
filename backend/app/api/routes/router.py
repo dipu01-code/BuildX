@@ -9,6 +9,7 @@ from app.api.routes.plans import router as plans_router
 from app.api.routes.context import router as context_router
 from app.api.routes.conversations import router as conversations_router
 from app.api.routes.change_proposals import router as change_proposals_router
+from app.api.routes.settings import router as settings_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -18,3 +19,4 @@ api_router.include_router(plans_router)
 api_router.include_router(context_router)
 api_router.include_router(conversations_router)
 api_router.include_router(change_proposals_router)
+api_router.include_router(settings_router)

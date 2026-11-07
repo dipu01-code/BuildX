@@ -24,6 +24,7 @@ describe('preload desktop API', () => {
       'createConversation', 'listConversations', 'getConversation', 'sendConversationMessage', 'deleteConversation',
       'generateChangeProposal', 'listChangeProposals', 'getChangeProposal', 'approveChangeProposal', 'rejectChangeProposal', 'applyApprovedChangeProposal',
       'startTerminalProcess', 'listTerminalProcesses', 'stopTerminalProcess', 'onTerminalEvent', 'discoverTestCommands', 'startTestProcess',
+      'getSettings', 'patchSettings', 'resetSettings', 'getSettingsHealth',
     ]);
     await api.getAppInfo();
     expect(invoke).toHaveBeenCalledExactlyOnceWith('app:get-info');

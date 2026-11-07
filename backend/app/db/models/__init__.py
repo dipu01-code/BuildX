@@ -9,8 +9,9 @@ from app.db.models.project import (
     ProjectIndexedFile,
 )
 from app.db.models.project_plan import ChangeProposal, ProjectPlan
+from app.db.models.settings import AppSetting
 
 __all__ = [
     "Project", "ProjectPlan", "ChangeProposal", "ProjectIndexJob", "ProjectIndexedFile", "ProjectIndexedChunk",
-    "ProjectConversation", "ProjectConversationMessage",
+    "ProjectConversation", "ProjectConversationMessage", "AppSetting",
 ]

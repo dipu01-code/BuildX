@@ -29,13 +29,14 @@ def test_unexpected_error_does_not_expose_exception_details(caplog) -> None:
     response = client.get("/explode")
 
     assert response.status_code == 500
-    assert response.json() == {
-        "error": {
-            "code": "INTERNAL_SERVER_ERROR",
-            "message": "An unexpected error occurred",
-            "details": [],
-        }
-    }
+    body = response.json()["error"]
+    assert body["code"] == "INTERNAL_SERVER_ERROR"
+    assert "sensitive" not in body["message"]
+    assert "/Users/example" not in body["message"]
+    assert len(body["details"]) == 1
+    assert body["details"][0]["location"] == ["error"]
+    assert "Reference this support ID" in body["details"][0]["message"]
+    assert body["details"][0]["type"] == "server_error"
     assert "/Users/example" not in response.text
     assert "/Users/example" not in caplog.text
 

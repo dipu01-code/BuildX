@@ -89,6 +89,40 @@ The terminal process manager also accepts `BUILDX_TERMINAL_TIMEOUT_MS` (default 
 
 When run outside Electron, the default SQLite database is stored under macOS `~/Library/Application Support/BUILDX`, Windows `%APPDATA%/BUILDX`, or Linux `$XDG_DATA_HOME/buildx` (default `~/.local/share/buildx`).
 
+## Settings and operational reliability
+
+BUILDX keeps a centralized, typed settings system for non-secret user preferences. Preferences are persisted in the local SQLite database (`app_settings` table) and survive application restarts. Sensitive credentials — for example `BUILDX_OPENAI_API_KEY` — are never stored in settings; they remain in backend environment configuration (`backend/.env`) and are never returned by the settings API, shown on the settings screen, or written to logs.
+
+### Settings sections
+
+The Settings view organizes preferences into:
+
+- **General** — startup behavior, default project directory, confirmation preferences for destructive actions, reset to defaults.
+- **Appearance** — theme (system / light / dark) and UI density. This phase renders a dark interface; the preference is stored for a later light-theme phase.
+- **Editor** — font size, tab size, word wrap, minimap, auto-save (off by default). Auto-save is protected by save-before-close prompts.
+- **AI Provider** — provider and model metadata, connection status, and connection testing. Credentials are managed in `backend/.env`; no credential ever passes through the UI.
+- **Terminal** — default working directory (preference only; Phase 13 command approval and approved project paths remain enforced), output retention limit, default timeout.
+- **Project Context** — maximum indexed file size and indexing enablement. Phase 10 security boundaries (.gitignore, sensitive-path exclusion, 1 MiB limit) are never bypassed by preferences.
+- **Privacy** — what is stored locally, what is sent to the configured AI provider, and optional telemetry (off by default; no telemetry is collected unless enabled).
+- **Operational Health** — on-demand status for the backend, database, migrations, AI provider, project indexing, terminal, and Electron. No automatic polling; refresh manually.
+
+### Settings API
+
+Versioned backend endpoints (no secrets in responses):
+
+- `GET /api/v1/settings` — read typed preferences
+- `PATCH /api/v1/settings` — partial update; unrelated sections are preserved
+- `POST /api/v1/settings/reset` — restore all preferences to safe defaults
+- `GET /api/v1/settings/health` — operational health dashboard
+
+### Health checks
+
+The health dashboard reports accurate status (healthy / degraded / unavailable / not configured / unknown) for components that actually exist, including the FastAPI backend, SQLite database, migration head, AI provider configuration, project indexing service, terminal process manager, and Electron. It does not run destructive diagnostics or modify user projects.
+
+### Diagnostic logging
+
+The backend emits structured JSON logs to stdout with one log record per line. Error records include a short support identifier (`error_id`) that is surfaced to the user so it can be correlated with logs. API keys, tokens, passwords, and private project contents are redacted and never logged.
+
 ## Project terminal
 
 The Terminal tab runs a command only after the user reviews its exact text and project directory, then explicitly selects Run. Commands execute through the system shell with a filtered environment, no interactive stdin, and no PTY on macOS, Linux, and Windows. This is a local command runner, not a security sandbox: shell commands can still access the user's files and available tools. BUILDX applies a five-minute default timeout, at most two concurrent commands, and a 512 KiB output cap per session; environment variables can adjust those limits within the documented bounds. Output is rendered as text. Stop requests target the process group on macOS/Linux and the shell process on Windows; deliberately detached descendants may outlive Stop, and Windows descendant cleanup is not guaranteed. The last 20 completed sessions are kept in memory; app shutdown requests termination of active commands.

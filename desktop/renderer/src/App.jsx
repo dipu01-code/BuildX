@@ -1,6 +1,6 @@
 import React, { Component, lazy, useEffect, useRef, useState } from 'react';
 import { languageNameForPath } from './editor-language-name.js';
-import AISettings from './AISettings.jsx';
+import Settings from './Settings.jsx';
 import ProjectPlanner from './ProjectPlanner.jsx';
 import ProjectContextPanel from './ProjectContextPanel.jsx';
 import ProjectAssistantPanel from './ProjectAssistantPanel.jsx';
@@ -688,7 +688,7 @@ function AppContent() {
               ? <WorkspaceExplorer project={projects.find((item) => item.id === workspaceProjectId)} onBack={() => setWorkspaceProjectId(null)} onNavigateSection={(id) => { setWorkspaceProjectId(null); setSection(id); setActiveTab(sections.find((item) => item.id === id)?.label || 'Overview'); }} onChangeFolder={() => chooseProjectDirectory(projects.find((item) => item.id === workspaceProjectId))} />
               : <ProjectManagementView projects={projects} selectedProject={activeProject} loading={projectsLoading} error={projectsError} onRetry={() => refreshProjects()} onCreate={(event) => openDialog(event)} onSelect={(id) => { setActiveProjectId(id); setWorkspaceProjectId(null); }} onEdit={(project) => openDialog(document.activeElement, 'edit', project)} onDelete={(project) => setDeleteTarget(project)} onChooseDirectory={chooseProjectDirectory} onOpenWorkspace={(project) => { setWorkspaceProjectId(project.id); setActiveProjectId(project.id); }} onPlanProject={(project) => { setActiveProjectId(project.id); selectSection('planner'); }} />
               : section === 'planner' ? <ProjectPlanner projects={projects} selectedProject={activeProject} onProjectChange={setActiveProjectId} />
-                : section === 'settings' ? <AISettings /> : <section className="empty-view"><div className="empty-icon">{sections.find((item) => item.id === section)?.icon}</div><span className="eyebrow">{sections.find((item) => item.id === section)?.label.toUpperCase()}</span><h1>{section === 'tasks' ? 'A little room for what’s next.' : 'Your setup, at your pace.'}</h1><p>{section === 'tasks' ? 'Task tracking is not connected yet. This space will take shape in a later phase.' : 'Desktop preferences will be available in a later phase.'}</p><span className="later-pill">NOT CONNECTED YET <span>·</span> LATER PHASE</span></section>}
+                : section === 'settings' ? <Settings /> : <section className="empty-view"><div className="empty-icon">{sections.find((item) => item.id === section)?.icon}</div><span className="eyebrow">{sections.find((item) => item.id === section)?.label.toUpperCase()}</span><h1>{section === 'tasks' ? 'A little room for what’s next.' : 'Your setup, at your pace.'}</h1><p>{section === 'tasks' ? 'Task tracking is not connected yet. This space will take shape in a later phase.' : 'Desktop preferences will be available in a later phase.'}</p><span className="later-pill">NOT CONNECTED YET <span>·</span> LATER PHASE</span></section>}
           </div>
         </div>
         <footer className="statusbar"><div className="status-left"><span><i className="status-dot" />LOCAL ONLY</span><span className="status-divider" /><span>SECURE DESKTOP</span></div><div className="status-right"><span>{appInfo ? `BUILDX ${appInfo.version}` : 'BUILDX'}</span><span className="status-divider" /><span>EARLY ACCESS</span></div></footer>

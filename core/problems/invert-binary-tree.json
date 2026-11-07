@@ -1,0 +1,22 @@
+{
+  "id": "invert-binary-tree",
+  "title": "Invert Binary Tree",
+  "description": "Given the root of a binary tree, invert the tree and return its root (swap every left and right child).",
+  "topic": "trees",
+  "difficulty": "easy",
+  "testCases": [
+    { "input": { "tree": [4, 2, 7, 1, 3, 6, 9] }, "expected": [4, 7, 2, 9, 6, 3, 1], "description": "full three-level tree" },
+    { "input": { "tree": [] }, "expected": [], "description": "empty tree" }
+  ],
+  "hints": [
+    { "level": 1, "text": "Swap the left and right children of every node." },
+    { "level": 2, "text": "Do it recursively: invert the left subtree, invert the right subtree, then swap." },
+    { "level": 3, "text": "Base case: an empty node is already inverted." }
+  ],
+  "solution": {
+    "language": "javascript",
+    "code": "function invertTree(root) {\n  if (!root) return null;\n  const tmp = root.left;\n  root.left = invertTree(root.right);\n  root.right = invertTree(tmp);\n  return root;\n}",
+    "explanation": "Recursive post-order swap.",
+    "complexity": { "time": "O(n)", "space": "O(h)" }
+  }
+}

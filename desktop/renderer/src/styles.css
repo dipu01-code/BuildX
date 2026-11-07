@@ -531,3 +531,77 @@ button.starter-item:hover { background: rgba(255,255,255,.025); }
 .source-reference { padding: 0; border: 0; color: #c5dc9a; background: transparent; text-decoration: underline; cursor: pointer; }
 .testing-proposal-form { padding: .8rem; border: 1px solid #39443b; border-radius: 8px; }
 .testing-proposal-created { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; padding: .7rem; border: 1px solid #52694d; border-radius: 7px; }
+
+/* ---------- Settings ---------- */
+.settings-view { max-width: 900px; margin: 10px auto; padding-bottom: 30px; }
+.settings-heading { margin-bottom: 24px; }
+.settings-heading h1 { margin: 7px 0 4px; color: #e4e9e1; font-size: clamp(26px, 3vw, 36px); font-weight: 500; letter-spacing: -.055em; }
+.settings-heading-note { max-width: 720px; color: #929e94; font-size: 11px; line-height: 1.7; }
+.settings-heading-note code { color: #c8dbb5; }
+
+.settings-tabs { display: flex; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--line); background: #131714; }
+.settings-tab { min-width: 91px; display: flex; align-items: center; justify-content: center; gap: 2px; padding: 0 11px; border: 0; border-bottom: 1px solid transparent; color: #839087; background: transparent; font-size: 10px; cursor: pointer; }
+.settings-tab:hover { color: var(--text); background: rgba(255,255,255,.025); }
+.settings-tab.active { border-bottom-color: var(--lime); color: #dfe6da; }
+
+.settings-content { display: grid; gap: 16px; margin-top: 18px; }
+
+.settings-section { margin: 0; }
+.settings-section-card { padding: 16px; margin: 14px 0; border: 1px solid var(--line-strong); border-radius: 8px; background: linear-gradient(130deg, #1b211c, #151a16); }
+
+.settings-panel-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.settings-panel-top h2 { margin: 0; color: #dfe5dc; font-size: 15px; font-weight: 550; }
+.settings-panel-desc { margin: 0 0 14px; color: #929e94; font-size: 11px; line-height: 1.6; }
+.settings-panel-body { display: grid; gap: 14px; }
+
+.settings-label { display: block; margin: 12px 0 6px; color: #b4c0b2; font-size: 9px; font-weight: 600; letter-spacing: .08em; }
+.settings-input { width: 100%; min-height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 5px; color: #dce5d9; background: #111612; font: inherit; font-size: 11px; }
+.settings-input:focus { border-color: rgba(185,239,117,.55); outline: 2px solid var(--lime); outline-offset: 1px; }
+
+.settings-checkbox-row { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+.settings-checkbox { width: 16px; height: 16px; flex: 0 0 16px; accent-color: var(--lime); }
+.settings-checkbox-label { display: flex; align-items: center; gap: 8px; color: #c5cec3; font-size: 11px; cursor: pointer; margin: 0; }
+.settings-checkbox-label strong { color: #dce5d9; }
+.settings-checkbox-desc { color: #77837a; font-size: 9px; font-weight: 400; }
+
+.settings-caption { margin: 6px 0 0; color: #77837a; font-size: 9px; line-height: 1.6; }
+.settings-caption code { color: #c8dbb5; }
+
+.settings-actions-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+.ai-provider-card { padding: 20px; border: 1px solid var(--line-strong); border-radius: 9px; background: linear-gradient(130deg, #1b211c, #151a16); box-shadow: var(--shadow-panel); }
+.ai-provider-card-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.ai-provider-card-top h2 { margin: 7px 0 0; color: #e0e6dd; font-size: 17px; font-weight: 550; }
+.ai-provider-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.ai-provider-details div { min-width: 0; }
+.ai-provider-details dt { margin-bottom: 5px; color: #77837a; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.ai-provider-details dd { margin: 0; color: #d5ddd3; font-size: 11px; overflow-wrap: anywhere; }
+.ai-feedback, .ai-result-success, .ai-result-error { margin: 16px 0; color: #aab6aa; font-size: 11px; line-height: 1.7; }
+.ai-feedback code { color: #c8dbb5; }
+.ai-error, .ai-result-error { color: #e5a29c; }
+.ai-result-success { color: #c6dda9; }
+
+.privacy-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+.privacy-list { margin: 6px 0 0; padding-left: 16px; color: #929e94; font-size: 11px; line-height: 1.7; }
+.privacy-list li { margin: 4px 0; }
+
+.settings-error { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; padding: 12px; border: 1px solid rgba(230,112,97,.35); border-radius: 5px; color: #e8b2a9; background: rgba(230,112,97,.06); font-size: 10px; }
+
+.settings-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+
+.settings-tabs + .settings-content { margin-top: 6px; }
+
+/* Health dashboard */
+.health-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.health-error { color: #e5a29c; font-size: 10px; }
+.health-list { display: grid; gap: 8px; margin: 10px 0; }
+.health-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 7px; background: #151b16; }
+.health-row-info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.health-row-info strong { color: #dce5d9; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-row-message { color: #859187; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-row-status { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.health-overall { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); color: #758177; font-size: 10px; }
+.health-overall strong { color: #c5cec3; }
+.health-status-healthy { color: #addd9a; }
+.health-status-degraded, .health-status-not_configured { color: #d0a768; }
+.health-status-unavailable, .health-status-unknown { color: #e5a29c; }

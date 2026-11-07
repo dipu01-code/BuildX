@@ -1,0 +1,26 @@
+{
+  "name": "@buildx/core",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BUILDX core engine: pure TypeScript library (types, problem loader, selector, hint/solution services, repository interfaces). No HTTP, no database.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "problems"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest --config jest.config.js"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
