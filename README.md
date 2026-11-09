@@ -97,13 +97,13 @@ BUILDX keeps a centralized, typed settings system for non-secret user preference
 
 The Settings view organizes preferences into:
 
-- **General** — startup behavior, default project directory, confirmation preferences for destructive actions, reset to defaults.
-- **Appearance** — theme (system / light / dark) and UI density. This phase renders a dark interface; the preference is stored for a later light-theme phase.
-- **Editor** — font size, tab size, word wrap, minimap, auto-save (off by default). Auto-save is protected by save-before-close prompts.
+- **General** — startup behavior, default project directory, confirmation preferences for destructive actions, reset to defaults. These three preferences are stored for a later phase: BUILDX currently always opens to Home and always confirms deletes and discards.
+- **Appearance** — theme (system / light / dark) and UI density. Compact density is applied immediately (90% interface zoom). This phase renders a dark interface; the theme preference is stored for a later light-theme phase.
+- **Editor** — font size, tab size, and word wrap are applied to open editors immediately. Auto-save (off by default) saves the active file about one second after typing stops; a save error (for example a disk conflict) pauses auto-save until you resolve it. Minimap is stored only.
 - **AI Provider** — provider and model metadata, connection status, and connection testing. Credentials are managed in `backend/.env`; no credential ever passes through the UI.
-- **Terminal** — default working directory (preference only; Phase 13 command approval and approved project paths remain enforced), output retention limit, default timeout.
-- **Project Context** — maximum indexed file size and indexing enablement. Phase 10 security boundaries (.gitignore, sensitive-path exclusion, 1 MiB limit) are never bypassed by preferences.
-- **Privacy** — what is stored locally, what is sent to the configured AI provider, and optional telemetry (off by default; no telemetry is collected unless enabled).
+- **Terminal** — default working directory (preference only; Phase 13 command approval and approved project paths remain enforced), output retention limit, default timeout. Retention and timeout are applied by the Electron process manager when settings load or are saved, and override `BUILDX_TERMINAL_TIMEOUT_MS`; a new timeout applies to commands started afterwards.
+- **Project Context** — indexing enablement and maximum indexed file size. Turning indexing off blocks new index refreshes; existing indexed text stays searchable. The size preference is stored only; Phase 10 security boundaries (.gitignore, sensitive-path exclusion, 1 MiB limit) are never bypassed by preferences.
+- **Privacy** — what is stored locally and what is sent to the configured AI provider. BUILDX contains no telemetry; the telemetry preference is stored only.
 - **Operational Health** — on-demand status for the backend, database, migrations, AI provider, project indexing, terminal, and Electron. No automatic polling; refresh manually.
 
 ### Settings API
@@ -121,7 +121,7 @@ The health dashboard reports accurate status (healthy / degraded / unavailable /
 
 ### Diagnostic logging
 
-The backend emits structured JSON logs to stdout with one log record per line. Error records include a short support identifier (`error_id`) that is surfaced to the user so it can be correlated with logs. API keys, tokens, passwords, and private project contents are redacted and never logged.
+The backend emits structured JSON logs, one record per line, to stderr and to `logs/backend.log` in the BUILDX data directory (for example `~/Library/Application Support/BUILDX/logs/` on macOS when run from source; Electron passes its own user-data directory). The file rotates at 1 MiB and keeps three older files. If the log directory cannot be written, logging continues on stderr only. Error records include a short support identifier (`error_id`) that is surfaced to the user so it can be correlated with logs. API keys, tokens, passwords, and private project contents are redacted and never logged.
 
 ## Project terminal
 
@@ -176,7 +176,7 @@ The conversational assistant treats project excerpts as untrusted data and canno
 
 - The context index uses local lexical term matching; it does not provide embeddings, semantic retrieval, or automatic refresh-on-file-change.
 - OpenAI is the only provider. Assistant responses are non-streaming and require network access for generation.
-- The assistant does not apply patches, edit files, or run commands. A future phase is planned for reviewable, explicitly approved file changes.
+- The conversational assistant does not edit files or run commands itself; file changes go through Phase 12 single-file proposals that you review and approve.
 - Desktop packaging/installers and a release workflow are not configured yet.
 - There is no repository `LICENSE` file; no license has been configured.
 

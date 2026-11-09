@@ -52,6 +52,8 @@ function createTerminalProcesses({
 } = {}) {
   if (typeof getProjectRoot !== 'function') throw new TypeError('A project-root resolver is required.');
   const sessions = new Map();
+  let currentLimits = Object.freeze({ ...limits });
+  let retainedSessions = maxRetainedSessions;
   const requests = new Map();
 
   function snapshot(session) {
@@ -75,7 +77,7 @@ function createTerminalProcesses({
   function prune() {
     const finished = [...sessions.values()].filter((session) => session.endedAt !== null)
       .sort((left, right) => right.startedAt - left.startedAt);
-    for (const session of finished.slice(maxRetainedSessions)) {
+    for (const session of finished.slice(retainedSessions)) {
       sessions.delete(session.id);
       if (requests.get(session.requestId) === session.id) requests.delete(session.requestId);
     }
@@ -85,9 +87,9 @@ function createTerminalProcesses({
     const value = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
     const bytes = Buffer.byteLength(value, 'utf8');
     const marker = '\n[BUILDX: output limit reached; additional output is discarded]\n';
-    const willTruncate = bytes > limits.maxOutputBytes - session.outputBytes;
+    const willTruncate = bytes > currentLimits.maxOutputBytes - session.outputBytes;
     const reserve = willTruncate && !session.outputTruncated ? Buffer.byteLength(marker, 'utf8') : 0;
-    const available = Math.max(0, limits.maxOutputBytes - session.outputBytes - reserve);
+    const available = Math.max(0, currentLimits.maxOutputBytes - session.outputBytes - reserve);
     const accepted = bytes <= available ? value : Buffer.from(value).subarray(0, available).toString('utf8');
     const acceptedBytes = Buffer.byteLength(accepted, 'utf8');
     if (accepted) {
@@ -205,7 +207,7 @@ function createTerminalProcesses({
       throw new Error('This terminal request identifier was already used for a different command or configuration.');
     }
     const activeCount = [...sessions.values()].filter((session) => session.endedAt === null).length;
-    if (activeCount >= limits.maxConcurrent) throw new Error(`BUILDX allows up to ${limits.maxConcurrent} running terminal processes.`);
+    if (activeCount >= currentLimits.maxConcurrent) throw new Error(`BUILDX allows up to ${currentLimits.maxConcurrent} running terminal processes.`);
 
     const invocation = shellInvocation(command);
     const createdAt = new Date(now()).toISOString();
@@ -240,7 +242,7 @@ function createTerminalProcesses({
       publish(session, { type: 'timeout_requested' });
       signal(session, 'SIGTERM');
       session.killHandle = setTimeout(() => signal(session, 'SIGKILL'), TERMINATE_GRACE_MS);
-    }, limits.timeoutMs);
+    }, currentLimits.timeoutMs);
     session.timeoutHandle.unref?.();
     return snapshot(session);
   }
@@ -281,7 +283,20 @@ function createTerminalProcesses({
     }
   }
 
-  return Object.freeze({ start, list, stop, shutdown, limits });
+  // Saved user settings (Phase 16) override the timeout and retention; ranges match the backend schema.
+  function applyPreferences({ timeout_ms: timeoutMs, output_retention_limit: retention } = {}) {
+    currentLimits = Object.freeze({
+      ...currentLimits,
+      timeoutMs: boundedInteger(timeoutMs, currentLimits.timeoutMs, 1000, 30 * 60 * 1000),
+    });
+    retainedSessions = boundedInteger(retention, retainedSessions, 1, 200);
+    prune();
+  }
+
+  return Object.freeze({
+    start, list, stop, shutdown, applyPreferences,
+    get limits() { return currentLimits; },
+  });
 }
 
 module.exports = { createTerminalProcesses, MAX_COMMAND_CHARS, terminalLimits, safeEnvironment };

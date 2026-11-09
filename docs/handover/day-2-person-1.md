@@ -13,9 +13,11 @@ Package: `@buildx/core` (private)
 
 From the repo root:
 - `npm run test:core` — Jest tests for `/core` (config: `core/jest.config.js`)
-- `npm run build:core` — compile `/core`
-- `npm run build:cli` — compile `/cli` (runs after `build:core`)
-- `npm run cli` — run the CLI entry point
+- Compile `/core`: `npx tsc -p core/tsconfig.json`
+- Compile `/cli`: `npx tsc -p cli/tsconfig.json` (after `/core`)
+- Run the CLI: `node cli/dist/index.js <command>`
+
+The root `package.json` has no `build:core`, `build:cli`, or `cli` scripts.
 
 Existing tooling was left untouched: `npm test` (vitest), `npm run lint`, `npm run build` (vite) still work exactly as before.
 
@@ -89,7 +91,7 @@ buildx hint <id> [level]
 buildx solution <id>
 ```
 
-`pick` excludes recently seen problems (persisted in `~/.buildx-cli-seen.json`, last 10) and appends the chosen id. Run `npm run build:core && npm run build:cli && npm run cli` from the repo root, or `node cli/dist/index.js <command>`.
+`pick` excludes recently seen problems (persisted in `~/.buildx-cli-seen.json`, last 10) and appends the chosen id. Compile both packages as above, then run `node cli/dist/index.js <command>`.
 
 ## Tests
 

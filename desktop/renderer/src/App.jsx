@@ -78,7 +78,7 @@ function ProjectManagementView({
   </section>;
 }
 
-function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection }) {
+function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection, editorSettings = null }) {
   const [entriesByPath, setEntriesByPath] = useState({});
   const [expanded, setExpanded] = useState(new Set(['']));
   const [selected, setSelected] = useState(null);
@@ -188,13 +188,19 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection 
     try {
       const result = await window.buildxDesktop.writeWorkspaceText(project.id, file.path, file.content, file.revision);
       setFiles((current) => current.map((item) => item.path === file.path
-        ? { ...item, originalContent: item.content, revision: result.revision } : item));
+        ? { ...item, originalContent: file.content, revision: result.revision } : item));
       return true;
     } catch (saveError) {
       setEditorError(saveError.message || 'The file could not be saved. Your edits are still available.');
       return false;
     }
   }
+  // Auto-save (Settings > Editor) saves the active tab after a pause; a save error stops retries until the user acts.
+  useEffect(() => {
+    if (!editorSettings?.auto_save || !activeFile || !isDirty(activeFile) || editorError) return undefined;
+    const timer = window.setTimeout(() => saveFile(activeFile), 1000);
+    return () => window.clearTimeout(timer);
+  }, [editorSettings?.auto_save, activeFile?.path, activeFile?.content, editorError]);
   function closeFile(filePath, force = false) {
     const file = files.find((item) => item.path === filePath);
     if (!file) return;
@@ -361,7 +367,7 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection 
       <section className="file-tree-panel" aria-label="Project file tree"><div className="file-tree-heading"><strong>FILES</strong><span>Project root</span></div>{rows.length ? <ul className="file-tree">{rows.map((entry) => <li key={entry.path} style={{ '--tree-depth': entry.depth }}><button type="button" className={`file-tree-row ${selected?.path === entry.path ? 'selected' : ''} ${entry.type === 'symlink' ? 'blocked' : ''}`} onClick={() => entry.type === 'directory' ? toggleFolder(entry) : selectEntry(entry)} aria-label={`${entry.type === 'directory' ? expanded.has(entry.path) ? 'Collapse' : 'Expand' : 'Select'} ${entry.name}`}><span className="tree-disclosure">{entry.type === 'directory' ? expanded.has(entry.path) ? '⌄' : '›' : ' '}</span><span aria-hidden="true">{entry.type === 'directory' ? '▰' : entry.type === 'symlink' ? '↗' : '▤'}</span><span>{entry.name}</span>{entry.type === 'file' && <small>{entry.size} B</small>}</button></li>)}</ul> : <p className="project-state">This folder is empty.</p>}</section>
       <section className="file-preview-panel editor-panel" aria-label="Code editor">
         <div className="editor-tabs" role="tablist" aria-label="Open files">{files.map((file) => <div className={`editor-tab ${activeFilePath === file.path ? 'active' : ''}`} key={file.path}><button type="button" role="tab" aria-selected={activeFilePath === file.path} title={file.path} onClick={() => { setRequestedEditorLine(1); setActiveFilePath(file.path); setSelected({ name: file.path.split('/').at(-1), path: file.path, type: 'file' }); setEditorError(''); }}>{file.path.split('/').at(-1)}{isDirty(file) && <span className="dirty-dot" aria-label="Unsaved changes">●</span>}</button><IconButton label={`Close ${file.path}`} onClick={() => closeFile(file.path)}>×</IconButton></div>)}</div>
-        {activeFile ? <><div className="editor-file-toolbar"><span title={activeFile.path}>{activeFile.path}</span><div><Button className="quiet-button" onClick={() => editorControlsRef.current?.find()}>Find</Button><Button className="primary-button" onClick={() => saveFile()} disabled={!isDirty(activeFile)}>{isDirty(activeFile) ? 'Save' : 'Saved'} <kbd>⌘S</kbd></Button></div></div>{editorError && <div className="editor-error" role="alert"><span>{editorError}</span><Button className="quiet-button" onClick={() => { setCopyTarget(activeFile); setCopyPath(`${activeFile.path.split('/').at(-1)}.copy`); }}>Save as copy</Button></div>}<div className="code-editor-wrap"><React.Suspense fallback={<p className="project-state" role="status">Loading editor…</p>}><CodeEditor key={activeFile.path} path={activeFile.path} value={activeFile.content} initialLine={requestedEditorLine} onChange={(content) => updateFileContent(activeFile.path, content)} onSave={() => saveFile(activeFile)} onState={setCursor} onReady={(controls) => { editorControlsRef.current = controls; }} /></React.Suspense></div><div className="editor-statusbar"><span>{languageNameForPath(activeFile.path)}</span><span>Ln {cursor.line}, Col {cursor.column}</span><span>{isDirty(activeFile) ? 'UNSAVED' : 'SAVED'}</span></div></> : <div className="file-preview-empty"><span aria-hidden="true">⌘</span><p>Open a text file to start editing.</p></div>}
+        {activeFile ? <><div className="editor-file-toolbar"><span title={activeFile.path}>{activeFile.path}</span><div><Button className="quiet-button" onClick={() => editorControlsRef.current?.find()}>Find</Button><Button className="primary-button" onClick={() => saveFile()} disabled={!isDirty(activeFile)}>{isDirty(activeFile) ? 'Save' : 'Saved'} <kbd>⌘S</kbd></Button></div></div>{editorError && <div className="editor-error" role="alert"><span>{editorError}</span><Button className="quiet-button" onClick={() => { setCopyTarget(activeFile); setCopyPath(`${activeFile.path.split('/').at(-1)}.copy`); }}>Save as copy</Button></div>}<div className="code-editor-wrap"><React.Suspense fallback={<p className="project-state" role="status">Loading editor…</p>}><CodeEditor key={activeFile.path} path={activeFile.path} value={activeFile.content} initialLine={requestedEditorLine} onChange={(content) => updateFileContent(activeFile.path, content)} onSave={() => saveFile(activeFile)} onState={setCursor} settings={editorSettings} onReady={(controls) => { editorControlsRef.current = controls; }} /></React.Suspense></div><div className="editor-statusbar"><span>{languageNameForPath(activeFile.path)}</span><span>Ln {cursor.line}, Col {cursor.column}</span><span>{isDirty(activeFile) ? 'UNSAVED' : 'SAVED'}</span></div></> : <div className="file-preview-empty"><span aria-hidden="true">⌘</span><p>Open a text file to start editing.</p></div>}
       </section>
     </div>}
     {dialog && <div className="modal-backdrop"><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="workspace-dialog-title"><div className="dialog-top"><span className="dialog-kicker">WORKSPACE ITEM</span><IconButton label="Close dialog" onClick={() => setDialog(null)}>×</IconButton></div><h2 id="workspace-dialog-title">{dialog === 'file' ? 'Create a file' : dialog === 'folder' ? 'Create a folder' : 'Rename or move'}</h2><p>{dialog === 'move' ? 'Enter a project-relative destination path. Existing items will not be overwritten.' : 'Enter a name for this new item in the current folder.'}</p><form onSubmit={submitDialog}><label htmlFor="workspace-item-path">{dialog === 'move' ? 'Destination path' : 'Name'}</label><TextInput id="workspace-item-path" label="Workspace item name" value={dialogValue} onChange={setDialogValue} placeholder={dialog === 'move' ? 'src/new-name.ts' : 'README.md'} maxLength={2048} /><div className="dialog-actions"><Button className="quiet-button" onClick={() => setDialog(null)} disabled={busy}>Cancel</Button><Button className="primary-button" type="submit" disabled={!dialogValue.trim() || busy}>{busy ? 'Working…' : 'Continue'}</Button></div></form></section></div>}
@@ -410,6 +416,7 @@ function AppContent() {
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [workspaceProjectId, setWorkspaceProjectId] = useState(null);
   const [toast, setToast] = useState('');
+  const [appSettings, setAppSettings] = useState(null);
   const menuRef = useRef(null);
   const dialogRef = useRef(null);
   const deleteDialogRef = useRef(null);
@@ -418,6 +425,10 @@ function AppContent() {
   const paletteTriggerRef = useRef(null);
   const returnFocusRef = useRef(null);
   const toastTimer = useRef(null);
+
+  useEffect(() => {
+    window.buildxDesktop?.getSettings?.().then(setAppSettings).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -685,10 +696,10 @@ function AppContent() {
               <div className="section-heading"><div><span className="eyebrow">A CLEAR START</span><h2>Make this space yours</h2></div><button className="text-button" onClick={() => { selectSection('projects'); }}>Browse workspace <span aria-hidden="true">→</span></button></div>
               <div className="starter-row"><button type="button" className="starter-item" onClick={openDialog}><span className="starter-icon" aria-hidden="true">＋</span><span><strong>Create a project</strong><small>Keep project details together</small></span><span className="starter-arrow" aria-hidden="true">↗</span></button><button type="button" className="starter-item" onClick={(event) => openPalette(event.currentTarget)}><span className="starter-icon search-starter" aria-hidden="true">⌕</span><span><strong>Find your way around</strong><small>Search actions with Quick switch</small></span><span className="starter-arrow" aria-hidden="true">⌘K</span></button><button type="button" className="starter-item" onClick={() => selectSection('projects')}><span className="starter-icon" aria-hidden="true">◫</span><span><strong>Browse project files</strong><small>Choose a project folder and explore</small></span><span className="starter-arrow" aria-hidden="true">↗</span></button></div>
             </> : section === 'projects' ? workspaceProjectId && projects.find((item) => item.id === workspaceProjectId)?.root_path
-              ? <WorkspaceExplorer project={projects.find((item) => item.id === workspaceProjectId)} onBack={() => setWorkspaceProjectId(null)} onNavigateSection={(id) => { setWorkspaceProjectId(null); setSection(id); setActiveTab(sections.find((item) => item.id === id)?.label || 'Overview'); }} onChangeFolder={() => chooseProjectDirectory(projects.find((item) => item.id === workspaceProjectId))} />
+              ? <WorkspaceExplorer project={projects.find((item) => item.id === workspaceProjectId)} onBack={() => setWorkspaceProjectId(null)} onNavigateSection={(id) => { setWorkspaceProjectId(null); setSection(id); setActiveTab(sections.find((item) => item.id === id)?.label || 'Overview'); }} onChangeFolder={() => chooseProjectDirectory(projects.find((item) => item.id === workspaceProjectId))} editorSettings={appSettings?.editor} />
               : <ProjectManagementView projects={projects} selectedProject={activeProject} loading={projectsLoading} error={projectsError} onRetry={() => refreshProjects()} onCreate={(event) => openDialog(event)} onSelect={(id) => { setActiveProjectId(id); setWorkspaceProjectId(null); }} onEdit={(project) => openDialog(document.activeElement, 'edit', project)} onDelete={(project) => setDeleteTarget(project)} onChooseDirectory={chooseProjectDirectory} onOpenWorkspace={(project) => { setWorkspaceProjectId(project.id); setActiveProjectId(project.id); }} onPlanProject={(project) => { setActiveProjectId(project.id); selectSection('planner'); }} />
               : section === 'planner' ? <ProjectPlanner projects={projects} selectedProject={activeProject} onProjectChange={setActiveProjectId} />
-                : section === 'settings' ? <Settings /> : <section className="empty-view"><div className="empty-icon">{sections.find((item) => item.id === section)?.icon}</div><span className="eyebrow">{sections.find((item) => item.id === section)?.label.toUpperCase()}</span><h1>{section === 'tasks' ? 'A little room for what’s next.' : 'Your setup, at your pace.'}</h1><p>{section === 'tasks' ? 'Task tracking is not connected yet. This space will take shape in a later phase.' : 'Desktop preferences will be available in a later phase.'}</p><span className="later-pill">NOT CONNECTED YET <span>·</span> LATER PHASE</span></section>}
+                : section === 'settings' ? <Settings onSettingsChange={setAppSettings} /> : <section className="empty-view"><div className="empty-icon">{sections.find((item) => item.id === section)?.icon}</div><span className="eyebrow">{sections.find((item) => item.id === section)?.label.toUpperCase()}</span><h1>{section === 'tasks' ? 'A little room for what’s next.' : 'Your setup, at your pace.'}</h1><p>{section === 'tasks' ? 'Task tracking is not connected yet. This space will take shape in a later phase.' : 'Desktop preferences will be available in a later phase.'}</p><span className="later-pill">NOT CONNECTED YET <span>·</span> LATER PHASE</span></section>}
           </div>
         </div>
         <footer className="statusbar"><div className="status-left"><span><i className="status-dot" />LOCAL ONLY</span><span className="status-divider" /><span>SECURE DESKTOP</span></div><div className="status-right"><span>{appInfo ? `BUILDX ${appInfo.version}` : 'BUILDX'}</span><span className="status-divider" /><span>EARLY ACCESS</span></div></footer>

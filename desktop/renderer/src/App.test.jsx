@@ -275,6 +275,28 @@ describe('BUILDX project management', () => {
     expect(await screen.findByText('SAVED')).toBeInTheDocument();
   });
 
+  it('auto-saves the active file after a pause when enabled in Settings', async () => {
+    const existing = project({ root_path: '/tmp/buildx-fixture' });
+    window.buildxDesktop.getSettings = vi.fn().mockResolvedValue({ version: 1, editor: { auto_save: true } });
+    window.buildxDesktop.listProjects.mockResolvedValue([existing]);
+    window.buildxDesktop.listWorkspaceDirectory.mockResolvedValue({ path: '', entries: [
+      { name: 'main.py', path: 'main.py', type: 'file', size: 8 },
+    ] });
+    window.buildxDesktop.readWorkspaceText.mockResolvedValue({ path: 'main.py', content: 'print(1)', revision: 'a'.repeat(64), size: 8 });
+    window.buildxDesktop.writeWorkspaceText.mockResolvedValue({ revision: 'b'.repeat(64), size: 8 });
+    render(<App />);
+    openProjects();
+    fireEvent.click(await screen.findByText('Atlas'));
+    fireEvent.click(screen.getByRole('button', { name: /open workspace/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Select main.py' }));
+    fireEvent.change(await screen.findByLabelText('Editor main.py'), { target: { value: 'print(2)' } });
+    expect(window.buildxDesktop.writeWorkspaceText).not.toHaveBeenCalled();
+    await waitFor(() => expect(window.buildxDesktop.writeWorkspaceText).toHaveBeenCalledWith(
+      existing.id, 'main.py', 'print(2)', 'a'.repeat(64),
+    ), { timeout: 2500 });
+    expect(await screen.findByText('SAVED')).toBeInTheDocument();
+  });
+
   it('warns before closing a dirty tab and supports save, discard, and cancel choices', async () => {
     const existing = project({ root_path: '/tmp/buildx-fixture' });
     window.buildxDesktop.listProjects.mockResolvedValue([existing]);

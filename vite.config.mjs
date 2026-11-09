@@ -15,7 +15,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test-setup.js',
-    include: ['src/**/*.test.jsx', '../electron/**/*.test.mjs'],
+    include: ['src/**/*.test.{js,jsx}', '../electron/**/*.test.mjs'],
     restoreMocks: true,
   },
 });

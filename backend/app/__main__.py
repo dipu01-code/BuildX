@@ -14,7 +14,7 @@ def main() -> None:
     """Bind the configured loopback address and report the actual port."""
 
     settings = get_settings()
-    configure_logging()
+    configure_logging(log_file=settings.resolved_data_dir / "logs" / "backend.log")
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind((settings.host, settings.port))
         server_socket.listen(socket.SOMAXCONN)

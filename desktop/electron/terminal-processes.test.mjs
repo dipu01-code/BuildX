@@ -164,6 +164,23 @@ describe('approved terminal process manager', () => {
     expect(manager.list(projectId).find((item) => item.id === session.id).status).toBe('failed');
   });
 
+  it('applies saved timeout and retention preferences within bounds', async () => {
+    const { manager } = await makeManager({ spawnImpl: () => new FakeChild() });
+    manager.applyPreferences({ timeout_ms: 15, output_retention_limit: 1 });
+    expect(manager.limits.timeoutMs).toBe(60_000);
+    manager.applyPreferences({ timeout_ms: 1000, output_retention_limit: 1 });
+    expect(manager.limits).toMatchObject({ timeoutMs: 1000, maxConcurrent: 2, maxOutputBytes: 64 });
+    manager.applyPreferences({});
+    expect(manager.limits.timeoutMs).toBe(1000);
+    for (const [index, command] of ['first', 'second'].entries()) {
+      await manager.start({ projectId, command, requestId: `550e8400-e29b-41d4-a716-44665544001${index}`,
+        approval: { project_id: projectId, command, working_directory: projectRoot } });
+      await manager.stop(projectId, manager.list(projectId)[0].id);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(manager.list(projectId).map((session) => session.command)).toEqual(['second']);
+  });
+
   it('applies conservative and bounded environment settings', () => {
     expect(terminalLimits({ BUILDX_TERMINAL_TIMEOUT_MS: '2000', BUILDX_TERMINAL_MAX_CONCURRENCY: '3', BUILDX_TERMINAL_MAX_OUTPUT_BYTES: '32000' }))
       .toEqual({ timeoutMs: 2000, maxConcurrent: 3, maxOutputBytes: 32000 });

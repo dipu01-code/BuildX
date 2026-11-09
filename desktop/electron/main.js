@@ -53,6 +53,26 @@ const testCommandDiscovery = createTestCommandDiscovery({
   getProjectRoot: (projectId) => workspaceFiles.getAuthorizedDirectory(projectApi, projectId),
 });
 const contextIndexer = createContextIndexer({ workspaceFiles, projectApi, contextApi });
+let appSettings = null;
+
+// Keep the main process in step with saved settings so services enforce them, not just the UI.
+function applySettings(settings) {
+  appSettings = settings;
+  terminalProcesses.applyPreferences(settings?.terminal);
+  applyDensity();
+  return settings;
+}
+
+function applyDensity() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.setZoomFactor(appSettings?.appearance?.ui_density === 'compact' ? 0.9 : 1);
+}
+
+function loadSettings() {
+  return settingsApi.getSettings().then(applySettings).catch((error) => {
+    console.error('BUILDX settings could not be loaded; using defaults:', error.message);
+  });
+}
 
 function isTrustedUrl(value) {
   return isTrustedRendererUrl(value, {
@@ -111,11 +131,20 @@ registerIpcHandlers({
     projectId, command: payload.command, requestId: payload.request_id, approval: payload.approval,
     purpose: 'test', configurationSource: payload.configuration_source, testRunner: payload.runner,
   }),
-  getSettings: () => settingsApi.getSettings(),
-  patchSettings: (patch) => settingsApi.patchSettings(patch),
-  resetSettings: () => settingsApi.resetSettings(),
+  getSettings: () => settingsApi.getSettings().then(applySettings),
+  patchSettings: (patch) => settingsApi.patchSettings(patch).then(applySettings),
+  resetSettings: async () => {
+    const result = await settingsApi.resetSettings();
+    await loadSettings();
+    return result;
+  },
   getSettingsHealth: () => settingsApi.getSettingsHealth(),
-  refreshProjectIndex: (projectId) => contextIndexer.refresh(projectId),
+  refreshProjectIndex: async (projectId) => {
+    if (appSettings?.project_context?.indexing_enabled === false) {
+      throw new Error('Project context indexing is turned off in Settings.');
+    }
+    return contextIndexer.refresh(projectId);
+  },
   getProjectIndexStatus: (projectId) => contextApi.getIndexStatus(projectId),
   listProjectIndexedFiles: (projectId) => contextApi.listIndexedFiles(projectId, { limit: 200 }),
   searchProjectContext: (projectId, query, limit) => contextApi.searchProjectContext(projectId, query, limit),
@@ -209,6 +238,7 @@ function createMainWindow() {
   mainWindow = window;
   installNavigationPolicy(window);
   window.once('ready-to-show', () => window.show());
+  window.webContents.on('did-finish-load', applyDensity);
   window.webContents.on('render-process-gone', (_event, details) => {
     console.error('BUILDX renderer process stopped:', details.reason);
     dialog.showErrorBox(
@@ -236,6 +266,12 @@ if (!hasSingleInstance) {
     mainWindow.focus();
   });
 
+  // macOS also fires 'activate' at launch; wait until startup has opened the first window.
+  let startupWindowCreated = false;
+  app.on('activate', () => {
+    if (startupWindowCreated && BrowserWindow.getAllWindows().length === 0) createMainWindow();
+  });
+
   app.whenReady().then(() => {
     configureContentSecurityPolicy();
     const backendDir = getBackendDirectory();
@@ -247,17 +283,19 @@ if (!hasSingleInstance) {
         .then(({ child, baseUrl }) => {
           backendProcess = child;
           backendBaseUrl = baseUrl;
+          return loadSettings();
         })
         .catch((error) => {
           console.error('BUILDX project service could not start:', error.message);
         })
-        .finally(() => createMainWindow());
+        .finally(() => {
+          startupWindowCreated = true;
+          createMainWindow();
+        });
     }
     console.error('BUILDX backend directory is unavailable; project management will be offline.');
+    startupWindowCreated = true;
     createMainWindow();
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
-    });
   }).catch(showStartupFailure);
 
   app.on('window-all-closed', () => {

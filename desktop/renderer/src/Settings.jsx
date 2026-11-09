@@ -180,7 +180,7 @@ function deepEqual(a, b) {
   return ka.every((key) => deepEqual(a[key], b[key]));
 }
 
-export default function Settings() {
+export default function Settings({ onSettingsChange = () => {} } = {}) {
   const bridge = window.buildxDesktop;
   const [settings, setSettings] = useState(null);
   const [working, setWorking] = useState(false);
@@ -270,6 +270,7 @@ export default function Settings() {
     try {
       const result = await bridge.getSettings();
       setSettings(result);
+      onSettingsChange(result);
       setDirty(false);
     } catch (loadError) {
       setError(loadError.message || 'BUILDX could not load settings.');
@@ -315,6 +316,7 @@ export default function Settings() {
     try {
       const result = await bridge.patchSettings(patch);
       setSettings(result);
+      onSettingsChange(result);
       setDirty(false);
       notify('Settings saved.');
     } catch (saveError) {
@@ -333,8 +335,10 @@ export default function Settings() {
     setResetConfirm(false);
     setError('');
     try {
-      const result = await bridge.resetSettings();
+      await bridge.resetSettings();
+      const result = await bridge.getSettings();
       setSettings(result);
+      onSettingsChange(result);
       setDirty(false);
       notify('Settings reset to defaults.');
     } catch (resetError) {
@@ -535,6 +539,10 @@ function GeneralSection({ settings, onChange, working, saveSettings, isDirty }) 
           options={STARTUP_BEHAVIORS}
           label="Startup behavior"
         />
+        <p className="settings-caption">
+          Stored for a later phase. BUILDX currently always opens to Home, and a project folder must be
+          confirmed again after each restart.
+        </p>
         <TextInput
           id="settings-default-directory"
           value={directory}
@@ -552,7 +560,7 @@ function GeneralSection({ settings, onChange, working, saveSettings, isDirty }) 
           label="Confirm destructive actions"
           checked={confirm}
           onChange={handleConfirm}
-          description="Require confirmation before deleting files, projects, or discarding edits."
+          description="Stored for a later phase. BUILDX currently always confirms before deleting files or projects and before discarding edits."
         />
         <div className="settings-actions-row">
           <button
@@ -915,7 +923,8 @@ function ProjectContextSection({ settings, onChange }) {
           maxLength={4}
         />
         <p className="settings-caption">
-          Files over 1 MiB remain unavailable to edit and are excluded from the index.
+          Stored for a later phase. The index currently always excludes files over 1 MiB.
+          Turning indexing off blocks new index refreshes; existing indexed text stays searchable.
         </p>
         <Checkbox
           id="settings-indexing-enabled"
@@ -970,7 +979,7 @@ function PrivacySection({ settings, onChange }) {
           label="Optional telemetry"
           checked={telemetry}
           onChange={(v) => { setTelemetry(v); onChange('privacy', { telemetry_enabled: v }); }}
-          description="Off by default. No telemetry is collected unless you enable it here."
+          description="Off by default. BUILDX does not include telemetry; this preference is stored only."
         />
         <p className="settings-caption">
           SQLite is not encrypted by BUILDX; protect your OS account and local data directory.

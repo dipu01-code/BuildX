@@ -4,6 +4,8 @@ from collections.abc import Mapping
 import hashlib
 import json
 import logging
+import logging.handlers
+from pathlib import Path
 import uuid
 from datetime import datetime, timezone
 
@@ -61,9 +63,20 @@ def new_error_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-def configure_logging(level: int = logging.INFO) -> None:
-    """Configure one JSON stream handler for the backend process."""
+def configure_logging(level: int = logging.INFO, log_file: Path | None = None) -> None:
+    """Configure JSON logging to stderr and, when given, a size-rotated log file."""
 
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonLogFormatter())
-    logging.basicConfig(level=level, handlers=[handler], force=True)
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if log_file is not None:
+        try:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            handlers.append(
+                logging.handlers.RotatingFileHandler(
+                    log_file, maxBytes=1024 * 1024, backupCount=3, encoding="utf-8"
+                )
+            )
+        except OSError:
+            pass  # An unwritable log directory must not stop the backend; stderr still works.
+    for handler in handlers:
+        handler.setFormatter(JsonLogFormatter())
+    logging.basicConfig(level=level, handlers=handlers, force=True)
