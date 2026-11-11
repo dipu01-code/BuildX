@@ -26,6 +26,7 @@ const {
 const devServerUrl = process.env.BUILDX_DEV_SERVER_URL || '';
 const expectedDevUrl = normalizeDevServerUrl(devServerUrl);
 const expectedRendererPath = rendererFilePath(__dirname);
+const APP_ICON_PATH = path.join(__dirname, '../assets/icon.png');
 let mainWindow;
 let backendProcess;
 let backendBaseUrl;
@@ -236,6 +237,7 @@ function createMainWindow() {
     show: false,
     backgroundColor: '#101311',
     title: 'BUILDX',
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -283,6 +285,8 @@ if (!hasSingleInstance) {
 
   app.whenReady().then(() => {
     configureContentSecurityPolicy();
+    // Packaged macOS builds get the icon from the app bundle; in development the Dock would show Electron's.
+    if (!app.isPackaged) app.dock?.setIcon(APP_ICON_PATH);
     const backendDir = getBackendDirectory();
     if (fs.existsSync(backendDir)) {
       return runMigrations({ backendDir, dataDir: app.getPath('userData') })

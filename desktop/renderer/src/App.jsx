@@ -7,6 +7,7 @@ import ProjectAssistantPanel from './ProjectAssistantPanel.jsx';
 import TerminalPanel from './TerminalPanel.jsx';
 import TestingPanel from './TestingPanel.jsx';
 import GitPanel from './GitPanel.jsx';
+import logoUrl from '../../assets/icon.svg';
 
 const CodeEditor = lazy(() => import('./CodeEditor.jsx'));
 
@@ -652,7 +653,7 @@ function AppContent() {
   return (
     <main className="app-frame">
       <aside className="app-rail" aria-label="Primary navigation">
-        <a className="brand-mark" href="#home" aria-label="BUILDX home" onClick={() => selectSection('home')}>B</a>
+        <a className="brand-mark" href="#home" aria-label="BUILDX home" onClick={() => selectSection('home')}><img src={logoUrl} alt="" /></a>
         <div className="rail-items">
           {sections.map((item) => <button key={item.id} className={`rail-button ${section === item.id ? 'selected' : ''}`} onClick={() => selectSection(item.id)} aria-label={item.label} aria-current={section === item.id ? 'page' : undefined} title={item.label}><span aria-hidden="true">{item.icon}</span></button>)}
         </div>

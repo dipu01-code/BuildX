@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>BUILDX</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232b25"/>
+      <stop offset="1" stop-color="#101311"/>
+    </linearGradient>
+    <linearGradient id="lime" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d6f8ab"/>
+      <stop offset="1" stop-color="#a3e05a"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+  <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="#b9ef75" stroke-opacity=".28" stroke-width="4"/>
+  <!-- A "B" assembled from blocks, with one more block being placed. -->
+  <g fill="url(#lime)">
+    <rect x="320" y="280" width="100" height="464" rx="24"/>
+    <path d="M464 280H532A108 108 0 0 1 532 496H464A24 24 0 0 1 440 472V304A24 24 0 0 1 464 280Z"/>
+    <path d="M464 516H576A114 114 0 0 1 576 744H464A24 24 0 0 1 440 720V540A24 24 0 0 1 464 516Z"/>
+  </g>
+  <rect x="672" y="196" width="68" height="68" rx="16" fill="#b9ef75" fill-opacity=".55"/>
+</svg>
