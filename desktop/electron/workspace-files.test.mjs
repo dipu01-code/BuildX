@@ -115,6 +115,15 @@ describe('project-scoped workspace filesystem', () => {
     await expect(fs.stat(path.join(projectRoot, 'src'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('allows case-only renames but never overwrites a different item', async () => {
+    await fs.writeFile(path.join(projectRoot, 'readme.md'), 'one');
+    await workspace.move(projectApi, projectId, 'readme.md', 'README.md');
+    expect(await fs.readdir(projectRoot)).toContain('README.md');
+    await fs.writeFile(path.join(projectRoot, 'other.md'), 'two');
+    await expect(workspace.move(projectApi, projectId, 'other.md', 'README.md')).rejects.toThrow(/already exists/i);
+    expect(await fs.readFile(path.join(projectRoot, 'README.md'), 'utf8')).toBe('one');
+  });
+
   it('rejects project-root deletion and moves into a folder descendant', async () => {
     await fs.mkdir(path.join(projectRoot, 'src'));
     await fs.mkdir(path.join(projectRoot, 'src/child'));

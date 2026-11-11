@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 const CODE_LABELS = { M: 'Modified', A: 'Added', D: 'Deleted', R: 'Renamed', C: 'Copied', T: 'Type changed', '?': 'Untracked' };
 
@@ -25,6 +25,7 @@ export default function GitPanel({ project }) {
   const [diff, setDiff] = useState('');
   const [message, setMessage] = useState('');
   const [review, setReview] = useState(null);
+  const diffRequest = useRef(0);
 
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
@@ -42,11 +43,17 @@ export default function GitPanel({ project }) {
   const isReviewed = Boolean(review && review.message === message && sameList(review.paths, currentStaged));
 
   async function showDiff(file, fromIndex) {
+    // Only the latest click may fill the diff; an older, slower response is dropped.
+    const request = ++diffRequest.current;
     setSelected({ path: file.path, staged: fromIndex });
     setDiff('');
     if (file.untracked) return;
-    try { setDiff((await window.buildxDesktop.getGitDiff(project.id, file.path, fromIndex)).diff); }
-    catch (diffError) { setError(diffError.message || 'The diff could not be loaded.'); }
+    try {
+      const result = await window.buildxDesktop.getGitDiff(project.id, file.path, fromIndex);
+      if (request === diffRequest.current) setDiff(result.diff);
+    } catch (diffError) {
+      if (request === diffRequest.current) setError(diffError.message || 'The diff could not be loaded.');
+    }
   }
 
   async function change(action, paths) {

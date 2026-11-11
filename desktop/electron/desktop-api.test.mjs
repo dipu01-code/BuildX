@@ -7,6 +7,17 @@ import { describe, expect, it, vi } from 'vitest';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe('preload desktop API', () => {
+  it('shows main-process errors without Electron\'s remote-method prefix', async () => {
+    const invoke = vi.fn().mockRejectedValue(new Error("Error invoking remote method 'git:commit': TypeError: The staged files changed after review."));
+    const exposeInMainWorld = vi.fn();
+    const source = fs.readFileSync(path.join(__dirname, 'preload.cjs'), 'utf8');
+    vm.runInNewContext(source, { require: () => ({ contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke } }), Object });
+    const api = exposeInMainWorld.mock.calls[0][1];
+    await expect(api.commitGit('id', {})).rejects.toThrow(/^The staged files changed after review\.$/);
+    invoke.mockRejectedValueOnce(new Error('plain failure'));
+    await expect(api.getAppInfo()).rejects.toThrow(/^plain failure$/);
+  });
+
   it('exposes only scoped app and project actions from the sandbox-compatible preload', async () => {
     const invoke = vi.fn().mockResolvedValue({ name: 'BUILDX', version: '0.1.0' });
     const exposeInMainWorld = vi.fn();

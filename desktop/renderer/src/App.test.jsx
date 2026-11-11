@@ -209,6 +209,36 @@ describe('BUILDX project management', () => {
     expect(window.buildxDesktop.readWorkspaceText).toHaveBeenCalledWith(existing.id, 'README.md');
   });
 
+  it('selects folders so new items go inside them and renames refresh the parent folder', async () => {
+    window.buildxDesktop.listProjects.mockResolvedValue([project({ root_path: '/tmp/buildx-fixture' })]);
+    let renamed = false;
+    window.buildxDesktop.listWorkspaceDirectory.mockImplementation(async (_id, relativePath) => {
+      if (relativePath === '') return { path: '', entries: [{ name: renamed ? 'lib' : 'src', path: renamed ? 'lib' : 'src', type: 'directory' }] };
+      if (relativePath === 'src' && renamed) throw new Error('The requested workspace item no longer exists.');
+      return { path: relativePath, entries: [] };
+    });
+    window.buildxDesktop.createWorkspaceFile.mockResolvedValue({ path: 'src/a.js' });
+    window.buildxDesktop.moveWorkspaceItem.mockImplementation(async () => { renamed = true; return { path: 'lib' }; });
+    render(<App />);
+    openProjects();
+    fireEvent.click(await screen.findByText('Atlas'));
+    fireEvent.click(screen.getByRole('button', { name: /open workspace/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand src' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New file' }));
+    fireEvent.change(screen.getByLabelText('Workspace item name'), { target: { value: 'a.js' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(window.buildxDesktop.createWorkspaceFile).toHaveBeenCalledWith(expect.any(String), 'src/a.js'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Collapse src' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename / move' }));
+    fireEvent.change(screen.getByLabelText('Workspace item name'), { target: { value: 'lib' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('button', { name: 'Expand lib' })).toBeInTheDocument();
+    expect(window.buildxDesktop.moveWorkspaceItem).toHaveBeenCalledWith(expect.any(String), 'src', 'lib');
+    expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
+  });
+
   it('offers native folder confirmation when a saved workspace needs authorization again', async () => {
     const existing = project({ root_path: '/tmp/buildx-fixture' });
     window.buildxDesktop.listProjects.mockResolvedValue([existing]);

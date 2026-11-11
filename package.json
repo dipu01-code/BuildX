@@ -1,3 +1,4 @@
+
 {
   "name": "buildx-desktop",
   "version": "0.1.0",
@@ -16,7 +17,8 @@
     "lint": "eslint --ext .js,.jsx,.cjs,.mjs desktop/electron desktop/renderer/src *.mjs",
     "check": "npm run lint && npm test && npm run build",
     "build:backend": "cd backend && uv run --group build pyinstaller buildx-backend.spec --noconfirm --clean",
-    "dist": "npm run build && npm run build:backend && electron-builder --publish never"
+    "dist": "npm run build && npm run build:backend && electron-builder --publish never",
+    "dist:mac": "npm run build && npm run build:backend && electron-builder --mac dmg zip --publish never"
   },
   "dependencies": {
     "@codemirror/lang-css": "6.3.1",
@@ -59,16 +61,48 @@
   "build": {
     "appId": "dev.buildx.desktop",
     "productName": "BUILDX",
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "package.json",
       "desktop/electron/**/*",
       "!desktop/electron/**/*.test.*",
       "desktop/renderer/dist/**/*"
     ],
-    "extraResources": [{ "from": "backend/dist/buildx-backend", "to": "backend" }],
-    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.developer-tools" },
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage", "category": "Development" }
+    "extraResources": [
+      {
+        "from": "backend/dist/buildx-backend",
+        "to": "backend"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    }
   }
 }

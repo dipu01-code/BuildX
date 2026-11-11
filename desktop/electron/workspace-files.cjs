@@ -364,9 +364,12 @@ function createWorkspaceFiles({ fsImpl = fs, platform = process.platform } = {})
         throw controlledError('A folder cannot be moved into itself or one of its children.', 'MOVE_INTO_DESCENDANT');
       }
       // Refuse an already existing destination; path-based APIs cannot close every race with other local processes.
+      // A case-only rename (readme.md -> README.md) finds the source itself on case-insensitive disks; allow that.
       try {
-        await fsImpl.lstat(destination.target);
-        throw controlledError('An item with that name already exists.', 'DESTINATION_EXISTS');
+        const existing = await fsImpl.lstat(destination.target);
+        const sameItem = existing.ino === info.ino && existing.dev === info.dev
+          && source.target.toLowerCase() === destination.target.toLowerCase();
+        if (!sameItem) throw controlledError('An item with that name already exists.', 'DESTINATION_EXISTS');
       } catch (error) {
         if (error.code !== 'ENOENT') throw error;
       }

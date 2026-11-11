@@ -60,6 +60,24 @@ describe('source control panel', () => {
     expect(messageInput).toHaveValue('');
   });
 
+  it('shows the diff for the last clicked file even if an earlier diff arrives later', async () => {
+    let finishFirst;
+    window.buildxDesktop = {
+      getGitStatus: vi.fn().mockResolvedValue({ ...dirty, files: [dirty.files[0], file({ path: 'b.js', index: '.', worktree: 'M', staged: false, unstaged: true })] }),
+      getGitDiff: vi.fn()
+        .mockReturnValueOnce(new Promise((resolve) => { finishFirst = resolve; }))
+        .mockResolvedValueOnce({ diff: '+from b' }),
+    };
+    render(<GitPanel project={project} />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Modified.*src\/app\.js$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Modified.*b\.js$/ }));
+    expect(await screen.findByText('+from b')).toBeInTheDocument();
+    finishFirst({ diff: '+from app' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText('+from app')).not.toBeInTheDocument();
+    expect(screen.getByText('+from b')).toBeInTheDocument();
+  });
+
   it('shows git errors without losing the commit message', async () => {
     window.buildxDesktop = {
       getGitStatus: vi.fn().mockResolvedValue(staged),

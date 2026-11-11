@@ -133,6 +133,7 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection,
 
   function joinPath(parent, name) { return parent ? `${parent}/${name}` : name; }
   async function toggleFolder(entry) {
+    setSelected(entry);
     const pathName = entry.path;
     if (expanded.has(pathName)) {
       setExpanded((current) => { const next = new Set(current); next.delete(pathName); return next; });
@@ -311,22 +312,23 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection,
     if (!name || busy) return;
     const currentDir = selected?.type === 'directory' ? selected.path : selected ? selected.path.split('/').slice(0, -1).join('/') : '';
     const target = dialog === 'move' ? name : joinPath(currentDir, name);
+    // A moved item disappears from its own parent, so refresh that parent, not the item's old path.
+    const refreshDir = dialog === 'move' ? selected.path.split('/').slice(0, -1).join('/') : currentDir;
     setBusy(true); setError('');
     try {
       if (dialog === 'file') await window.buildxDesktop.createWorkspaceFile(project.id, target);
       else if (dialog === 'folder') await window.buildxDesktop.createWorkspaceFolder(project.id, target);
       else await window.buildxDesktop.moveWorkspaceItem(project.id, selected.path, target);
       setDialog(null); setDialogValue('');
-      await loadDirectory(currentDir);
+      await loadDirectory(refreshDir);
       if (dialog === 'move') {
         const destinationParent = target.split('/').slice(0, -1).join('/');
-        if (destinationParent !== currentDir) await loadDirectory(destinationParent);
+        if (destinationParent !== refreshDir) await loadDirectory(destinationParent);
         setFiles((current) => current.map((file) => file.path === selected.path || file.path.startsWith(`${selected.path}/`)
           ? { ...file, path: `${target}${file.path.slice(selected.path.length)}` } : file));
         if (activeFilePath === selected.path || activeFilePath?.startsWith(`${selected.path}/`)) {
           setActiveFilePath(`${target}${activeFilePath.slice(selected.path.length)}`);
         }
-        setSelected({ ...selected, path: target, name: target.split('/').at(-1) });
         setSelected(null);
       }
     } catch (operationError) { setError(operationError.message || 'The workspace operation failed.'); }
