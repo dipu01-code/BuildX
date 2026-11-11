@@ -11,6 +11,7 @@ const { createConversationApi } = require('./conversation-api.cjs');
 const { createChangeProposalApi } = require('./change-proposal-api.cjs');
 const { createTerminalProcesses } = require('./terminal-processes.cjs');
 const { createTestCommandDiscovery } = require('./test-command-discovery.cjs');
+const { createGitService } = require('./git-service.cjs');
 const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
 const { createSettingsAPI } = require('./settings-api.cjs');
@@ -50,6 +51,9 @@ const terminalProcesses = createTerminalProcesses({
   },
 });
 const testCommandDiscovery = createTestCommandDiscovery({
+  getProjectRoot: (projectId) => workspaceFiles.getAuthorizedDirectory(projectApi, projectId),
+});
+const gitService = createGitService({
   getProjectRoot: (projectId) => workspaceFiles.getAuthorizedDirectory(projectApi, projectId),
 });
 const contextIndexer = createContextIndexer({ workspaceFiles, projectApi, contextApi });
@@ -131,6 +135,11 @@ registerIpcHandlers({
     projectId, command: payload.command, requestId: payload.request_id, approval: payload.approval,
     purpose: 'test', configurationSource: payload.configuration_source, testRunner: payload.runner,
   }),
+  getGitStatus: (projectId) => gitService.status(projectId),
+  getGitDiff: (projectId, relativePath, staged) => gitService.diff(projectId, relativePath, staged),
+  stageGitPaths: (projectId, paths) => gitService.stage(projectId, paths),
+  unstageGitPaths: (projectId, paths) => gitService.unstage(projectId, paths),
+  commitGit: (projectId, payload) => gitService.commit(projectId, payload),
   getSettings: () => settingsApi.getSettings().then(applySettings),
   patchSettings: (patch) => settingsApi.patchSettings(patch).then(applySettings),
   resetSettings: async () => {

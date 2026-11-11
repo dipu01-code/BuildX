@@ -41,6 +41,9 @@ const TERMINAL_CHANNELS = Object.freeze({
   start: 'terminal:start', list: 'terminal:list', stop: 'terminal:stop',
 });
 const TESTING_CHANNELS = Object.freeze({ discover: 'testing:discover', start: 'testing:start' });
+const GIT_CHANNELS = Object.freeze({
+  status: 'git:status', diff: 'git:diff', stage: 'git:stage', unstage: 'git:unstage', commit: 'git:commit',
+});
 const PLANNER_CHANNELS = Object.freeze({
   generate: 'plans:generate', list: 'plans:list', get: 'plans:get', save: 'plans:save', update: 'plans:update', delete: 'plans:delete',
 });
@@ -101,6 +104,7 @@ function registerIpcHandlers({
   discoverTestCommands,
   startTestProcess,
   getSettings, patchSettings, resetSettings, getSettingsHealth,
+  getGitStatus, getGitDiff, stageGitPaths, unstageGitPaths, commitGit,
 }) {
   ipcMain.handle(APP_INFO_CHANNEL, (event, ...args) => {
     validateSender(event);
@@ -208,6 +212,48 @@ function registerIpcHandlers({
       throw new TypeError('Review the exact test command, source, and project directory before running it.');
     }
     return startTestProcess(args[0], payload);
+  });
+
+  function validateGitPaths(paths) {
+    if (!Array.isArray(paths) || !paths.length || paths.length > 100) throw new TypeError('Choose 1 to 100 files.');
+    for (const value of paths) validateRelativePath(value);
+  }
+
+  ipcMain.handle(GIT_CHANNELS.status, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 1) throw new TypeError('git:status requires one project identifier.');
+    validateProjectId(args[0]);
+    return getGitStatus(args[0]);
+  });
+
+  ipcMain.handle(GIT_CHANNELS.diff, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 3 || typeof args[2] !== 'boolean') throw new TypeError('git:diff requires a project, a path, and a staged flag.');
+    validateProjectId(args[0]); validateRelativePath(args[1]);
+    return getGitDiff(args[0], args[1], args[2]);
+  });
+
+  for (const [channel, handler] of [[GIT_CHANNELS.stage, stageGitPaths], [GIT_CHANNELS.unstage, unstageGitPaths]]) {
+    ipcMain.handle(channel, (event, ...args) => {
+      validateSender(event);
+      if (args.length !== 2) throw new TypeError(`${channel} requires a project identifier and a list of paths.`);
+      validateProjectId(args[0]); validateGitPaths(args[1]);
+      return handler(args[0], args[1]);
+    });
+  }
+
+  ipcMain.handle(GIT_CHANNELS.commit, (event, ...args) => {
+    validateSender(event);
+    if (args.length !== 2) throw new TypeError('git:commit requires a project identifier and a reviewed commit.');
+    validateProjectId(args[0]);
+    const payload = args[1];
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || typeof payload.message !== 'string' || !payload.message.trim() || payload.message.length > 5000) {
+      throw new TypeError('Enter a commit message of 1 to 5,000 characters.');
+    }
+    if (!Array.isArray(payload.staged_paths) || payload.staged_paths.length > 10000) throw new TypeError('Review the staged files before committing.');
+    for (const value of payload.staged_paths) validateRelativePath(value);
+    return commitGit(args[0], { message: payload.message, staged_paths: payload.staged_paths });
   });
 
   ipcMain.handle(SETTINGS_CHANNELS.get, (event, ...args) => {
@@ -402,4 +448,4 @@ function registerIpcHandlers({
   });
 }
 
-module.exports = { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, PROJECT_CHANNELS, TERMINAL_CHANNELS, TESTING_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };
+module.exports = { AI_CHANNELS, CONTEXT_CHANNELS, CONVERSATION_CHANNELS, GIT_CHANNELS, PROJECT_CHANNELS, TERMINAL_CHANNELS, TESTING_CHANNELS, WORKSPACE_CHANNELS, registerIpcHandlers };

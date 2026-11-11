@@ -27,12 +27,12 @@ Resume point for future sessions. Update this file at the end of every phase.
 | 12 | Reviewed AI code changes | Done | `204bf79` |
 | 13 | Terminal and process management | Done | `df373d6` (+ fixes `8fe9cc1`, `857b991`) |
 | 14 | Testing and AI debugging | Done | `4b138cc` |
-| 15 | Not defined in the repository | **Not started — definition needed** | — |
-| 16 | Settings and operational reliability | Committed in `b421f45`; completion work uncommitted (see below) | — |
-| 17 | Not defined in the repository | **Not started — definition needed** | — |
+| 15 | Git integration (Source control tab) | Done | see `git log` |
+| 16 | Settings and operational reliability | Done | `b421f45` + `43b0530` |
+| 17 | CI and release hygiene (CI workflow, LICENSE, httpx warning) | Not started | — |
 | 18 | Packaging, installers, release workflow | Not started | — |
 
-## Phase 16 completion (2026-11-10, uncommitted)
+## Phase 16 completion (2026-11-10, committed in `43b0530`)
 
 Commit `b421f45` stored settings but services did not use them. Completion work:
 
@@ -47,9 +47,15 @@ Commit `b421f45` stored settings but services did not use them. Completion work:
 - Vitest now runs `*.test.js` renderer tests (two files were silently skipped).
 - New tests: settings bridge, Settings screen, editor preferences, auto-save, terminal preferences, backend log file.
 
+## Phase 15 (2026-11-11)
+
+- `desktop/electron/git-service.cjs`: status, diff, stage, unstage, commit; runs `git` without a shell in the confirmed project folder, only when it is the repository top level.
+- Hooks, fsmonitor, external diff, textconv, and commit signing are disabled; pathspecs are literal.
+- Commit requires the reviewed staged paths to match the current index.
+- `GitPanel.jsx` is the Source control tab. Details in `docs/development.md`.
+
 ## Open items needing a decision
 
-- Define Phases 15 and 17.
 - `core/` + `cli/` (coding-problem engine from the "Day-2" hand-over) is not used by the desktop app; decide whether it belongs in BUILDX.
 - Untracked root `app.js` (React Native snippet) is unrelated to BUILDX.
 

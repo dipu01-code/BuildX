@@ -6,6 +6,7 @@ import ProjectContextPanel from './ProjectContextPanel.jsx';
 import ProjectAssistantPanel from './ProjectAssistantPanel.jsx';
 import TerminalPanel from './TerminalPanel.jsx';
 import TestingPanel from './TestingPanel.jsx';
+import GitPanel from './GitPanel.jsx';
 
 const CodeEditor = lazy(() => import('./CodeEditor.jsx'));
 
@@ -358,8 +359,9 @@ function WorkspaceExplorer({ project, onBack, onChangeFolder, onNavigateSection,
     {error && <div className="project-error" role="alert"><span>{error}</span>{needsFolderConfirmation
       ? <Button className="quiet-button" onClick={confirmProjectFolder}>Confirm project folder</Button>
       : <Button className="quiet-button" onClick={() => loadDirectory('')}>Retry</Button>}</div>}
-    <Tabs tabs={['Files', 'Context', 'Assistant', 'Terminal', 'Testing']} activeTab={workspaceView} label="Project workspace views" onSelect={setWorkspaceView} />
-    {workspaceView === 'Testing' ? <TestingPanel project={project} onOpenSource={openContextResult} onOpenAssistant={() => setWorkspaceView('Assistant')} />
+    <Tabs tabs={['Files', 'Context', 'Assistant', 'Terminal', 'Testing', 'Source control']} activeTab={workspaceView} label="Project workspace views" onSelect={setWorkspaceView} />
+    {workspaceView === 'Source control' ? <GitPanel project={project} />
+      : workspaceView === 'Testing' ? <TestingPanel project={project} onOpenSource={openContextResult} onOpenAssistant={() => setWorkspaceView('Assistant')} />
       : workspaceView === 'Terminal' ? <TerminalPanel project={project} />
       : workspaceView === 'Context' ? <ProjectContextPanel project={project} onOpenResult={openContextResult} />
       : workspaceView === 'Assistant' ? <ProjectAssistantPanel project={project} onOpenSource={openContextResult} />

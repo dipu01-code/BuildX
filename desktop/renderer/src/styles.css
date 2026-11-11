@@ -503,6 +503,13 @@ button.starter-item:hover { background: rgba(255,255,255,.025); }
 .terminal-output section + section { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid #2c362e; }
 .terminal-output h3 { margin: 0; color: #a9c496; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
 .terminal-error { padding: .7rem .85rem; color: #ffd0c8; background: #3b201e; border: 1px solid #74403a; border-radius: 7px; }
+.git-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1rem; }
+.git-columns h3 { margin: 0 0 .5rem; font-size: .9rem; }
+.git-file-list { display: grid; gap: .25rem; margin: 0; padding: 0; list-style: none; max-height: 18rem; overflow: auto; }
+.git-file { display: flex; align-items: center; gap: .5rem; padding: .2rem .4rem; border: 1px solid transparent; border-radius: 6px; }
+.git-file.active { border-color: #889b68; background: #151b16; }
+.git-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: .3rem 0; color: inherit; background: none; border: 0; text-align: left; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
+.git-file-code { display: inline-block; min-width: 6.5rem; color: #a9c496; font-family: inherit; }
 .testing-panel { display: grid; gap: 1rem; min-height: 30rem; padding: 1rem 0; }
 .testing-heading, .testing-results-heading, .testing-run-state { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; }
 .testing-heading h2, .testing-discovery h3, .testing-results h3 { margin: .3rem 0; }

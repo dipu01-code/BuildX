@@ -24,6 +24,7 @@ describe('preload desktop API', () => {
       'createConversation', 'listConversations', 'getConversation', 'sendConversationMessage', 'deleteConversation',
       'generateChangeProposal', 'listChangeProposals', 'getChangeProposal', 'approveChangeProposal', 'rejectChangeProposal', 'applyApprovedChangeProposal',
       'startTerminalProcess', 'listTerminalProcesses', 'stopTerminalProcess', 'onTerminalEvent', 'discoverTestCommands', 'startTestProcess',
+      'getGitStatus', 'getGitDiff', 'stageGitPaths', 'unstageGitPaths', 'commitGit',
       'getSettings', 'patchSettings', 'resetSettings', 'getSettingsHealth',
     ]);
     await api.getAppInfo();

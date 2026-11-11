@@ -13,6 +13,7 @@ BUILDX is a local-first desktop workspace for organizing development projects, b
 - Generate one-file code change proposals in the assistant, inspect the exact original and proposed contents, and explicitly approve before BUILDX applies them. Proposals are persisted and rejectable; creates and modifications are supported, while deletion and multi-file changes are not.
 - Run manually entered project commands from a reviewed terminal panel. Each run is scoped to the currently authorized project folder, has bounded time/output/concurrency, and can be stopped; process sessions are in memory and are ended when BUILDX closes.
 - Discover configured test commands, review and run them through the same terminal process manager, inspect bounded output and parsed summaries, and ask the existing assistant to explain a failed run. Suggested code fixes are created as Phase 12 proposals for explicit review.
+- Review Git changes in a Source control tab: see the branch and per-file diffs, stage or unstage files, and make local commits after reviewing the exact staged files. Git hooks are not run, and BUILDX does not push.
 
 There are no screenshots or demo assets in the repository yet.
 
