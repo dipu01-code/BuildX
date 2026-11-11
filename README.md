@@ -165,6 +165,17 @@ uv run python -m app
 
 The development API provides `/docs` on the loopback address printed in backend startup logs. Do not expose this local API to an untrusted network.
 
+## Build installers
+
+```bash
+cd backend && uv sync --group build && cd ..
+npm run dist
+```
+
+This builds the renderer, bundles the backend into a standalone executable with PyInstaller, and packages the app with electron-builder into `release/` (macOS DMG/zip, Windows installer, or Linux AppImage, matching the OS you build on). Installed builds need no Python. Put backend settings such as `BUILDX_OPENAI_API_KEY` in a `.env` file in the BUILDX data folder (macOS: `~/Library/Application Support/buildx-desktop`).
+
+To publish a release, set the `version` in `package.json`, commit, and push a matching tag (for example `v0.1.0`). `.github/workflows/release.yml` builds on all three platforms and attaches the installers to a GitHub release.
+
 ## Security and privacy
 
 BUILDX stores project metadata, plans, indexed text, and conversation history in local SQLite. SQLite is not encrypted by BUILDX; protect the OS account and local data directory. Electron requires native folder-picker confirmation for filesystem access, keeps filesystem calls in the main process, and rejects traversal and symbolic links. Indexing honors `.gitignore` and applies file, directory, size, and secret-pattern exclusions; review exclusions before relying on them as a complete secret scanner.
@@ -178,7 +189,7 @@ The conversational assistant treats project excerpts as untrusted data and canno
 - The context index uses local lexical term matching; it does not provide embeddings, semantic retrieval, or automatic refresh-on-file-change.
 - OpenAI is the only provider. Assistant responses are non-streaming and require network access for generation.
 - The conversational assistant does not edit files or run commands itself; file changes go through Phase 12 single-file proposals that you review and approve.
-- Desktop packaging/installers and a release workflow are not configured yet.
+- Installers are unsigned and use the default Electron icon. Windows and Linux packages are built by CI but have not been tested by hand.
 
 ## Contributing
 

@@ -12,7 +12,7 @@ const { createChangeProposalApi } = require('./change-proposal-api.cjs');
 const { createTerminalProcesses } = require('./terminal-processes.cjs');
 const { createTestCommandDiscovery } = require('./test-command-discovery.cjs');
 const { createGitService } = require('./git-service.cjs');
-const { resolvePython, runMigrations, startBackend } = require('./backend-process.cjs');
+const { runMigrations, startBackend } = require('./backend-process.cjs');
 const { createWorkspaceFiles } = require('./workspace-files.cjs');
 const { createSettingsAPI } = require('./settings-api.cjs');
 const {
@@ -285,10 +285,8 @@ if (!hasSingleInstance) {
     configureContentSecurityPolicy();
     const backendDir = getBackendDirectory();
     if (fs.existsSync(backendDir)) {
-      const python = resolvePython(backendDir);
-      const pythonEnv = { ...process.env, BUILDX_PYTHON: python };
-      return runMigrations({ backendDir, dataDir: app.getPath('userData'), env: pythonEnv })
-        .then(() => startBackend({ backendDir, dataDir: app.getPath('userData'), env: pythonEnv }))
+      return runMigrations({ backendDir, dataDir: app.getPath('userData') })
+        .then(() => startBackend({ backendDir, dataDir: app.getPath('userData') }))
         .then(({ child, baseUrl }) => {
           backendProcess = child;
           backendBaseUrl = baseUrl;

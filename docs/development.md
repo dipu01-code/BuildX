@@ -24,7 +24,7 @@ npm run build
 npm run check
 ```
 
-The renderer is JavaScript/JSX, so there is no TypeScript type-check command in this phase. ESLint checks JavaScript syntax and configured static rules. `npm run build` creates the Vite renderer at `desktop/renderer/dist`; `npm start` opens that built renderer in Electron. Packaging and installers are planned for Phase 18.
+The renderer is JavaScript/JSX, so there is no TypeScript type-check command in this phase. ESLint checks JavaScript syntax and configured static rules. `npm run build` creates the Vite renderer at `desktop/renderer/dist`; `npm start` opens that built renderer in Electron. Installers are built with `npm run dist` (see Phase 18).
 
 ## Desktop boundary
 
@@ -78,3 +78,12 @@ On explicit user action, a bounded and common-pattern-redacted excerpt plus run 
 The workspace **Source control** tab shows the branch (with ahead/behind counts when an upstream is set), staged and unstaged changes, and the diff for a selected tracked file. Users can stage or unstage files and commit staged changes locally. Electron's main process runs `git` directly (no shell) in the confirmed project folder with the Phase 13 filtered environment, `GIT_TERMINAL_PROMPT=0`, literal pathspecs, a 30-second timeout, and 1 MiB output cap. Paths use the Phase 6 relative-path validation. Source control is available only when the confirmed folder is the repository's top level, so Git never touches files outside it. The renderer must review the exact message and staged paths before committing; the main process rechecks the staged set and refuses the commit if it changed.
 
 Repository config can name programs for Git to run. BUILDX disables Git hooks, fsmonitor, external diff tools, textconv, and commit signing for these commands. Filter drivers in `.git/config` still apply, as they would in a terminal. There is no push, pull, fetch, branch switching, merge, discard, or history view; use the Terminal tab for those. Untracked files show no diff until they are staged. No migrations or persisted state were added.
+
+## Phase 18: packaging, installers, and releases
+
+`npm run dist` builds the renderer, bundles the backend with PyInstaller (`npm run build:backend`, recipe in `backend/buildx-backend.spec`, output `backend/dist/buildx-backend/`), then runs electron-builder (config in the `build` field of `package.json`, output `release/`). Targets: macOS DMG and zip, Windows NSIS installer, Linux AppImage. Each platform must be built on that platform because the backend executable is native.
+
+The bundled backend entry point is `backend/buildx_backend.py` (`migrate` or `serve`). Electron uses `<resources>/backend/buildx-backend` when it exists and otherwise falls back to Python in `backend/.venv` (development). Setting `BUILDX_PYTHON` forces the Python path. The bundled backend runs with the Electron data folder (`app.getPath('userData')`, macOS: `~/Library/Application Support/buildx-desktop`) as its working directory, so installed builds read `.env` (for example `BUILDX_OPENAI_API_KEY`) from that folder. Development builds and installed builds share this data folder.
+
+`.github/workflows/release.yml` runs on a `v*` tag that matches the `package.json` version, builds on macOS, Windows, and Linux, and attaches the installers to a GitHub release. Installers are unsigned and not notarized: macOS Gatekeeper and Windows SmartScreen warn on first launch. The app uses the default Electron icon. Only the macOS arm64 build has been produced and launched locally; the Windows and Linux builds are untested.
+

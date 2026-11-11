@@ -30,7 +30,7 @@ Resume point for future sessions. Update this file at the end of every phase.
 | 15 | Git integration (Source control tab) | Done | see `git log` |
 | 16 | Settings and operational reliability | Done | `b421f45` + `43b0530` |
 | 17 | CI and release hygiene (CI workflow, LICENSE, httpx warning) | Done | see `git log` |
-| 18 | Packaging, installers, release workflow | Not started | — |
+| 18 | Packaging, installers, release workflow | Done | see `git log` |
 
 ## Phase 16 completion (2026-11-10, committed in `43b0530`)
 
@@ -60,6 +60,14 @@ Commit `b421f45` stored settings but services did not use them. Completion work:
 - MIT `LICENSE`, `"license": "MIT"` in `package.json`.
 - Starlette's `httpx` test-client deprecation warning is filtered in `backend/pyproject.toml`.
 
+## Phase 18 (2026-11-11)
+
+- `backend/buildx_backend.py` + `backend/buildx-backend.spec`: PyInstaller one-folder backend (`npm run build:backend`).
+- Electron prefers `<resources>/backend/buildx-backend` (run in the data folder, so `.env` is read there) and falls back to `backend/.venv` in development.
+- electron-builder config in `package.json`; `npm run dist` → `release/`.
+- `.github/workflows/release.yml`: tag `v*` → build on macOS/Windows/Linux → GitHub release.
+- Verified locally: macOS arm64 DMG/zip build; packaged app launched, started its bundled backend, and shut it down on quit.
+
 ## Open items needing a decision
 
 - `core/` + `cli/` (coding-problem engine from the "Day-2" hand-over) is not used by the desktop app; decide whether it belongs in BUILDX.
@@ -67,7 +75,8 @@ Commit `b421f45` stored settings but services did not use them. Completion work:
 
 ## Known gaps / technical debt
 
-- Packaging blocker (Phase 18): Electron launches Python from `backend/.venv`; an installed app needs a bundled backend.
+- Installers are unsigned/not notarized and use the default Electron icon; Windows and Linux builds are untested by hand.
+- Renderer-only packages (React, CodeMirror) are `dependencies`, so electron-builder copies them into the app although Vite already bundles them (size only).
 - Electron main-process errors go to the console only (backend logs go to a file).
 - Backend tests use `httpx` with a filtered Starlette deprecation warning; switch to `httpx2` when Python 3.10 support is dropped (httpx2 needs 3.11+).
 - CI does not run on Windows.

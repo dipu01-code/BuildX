@@ -405,8 +405,9 @@ export default function Settings({ onSettingsChange = () => {} } = {}) {
         <h1>Settings</h1>
         <p className="settings-heading-note">
           Preferences are stored locally on this device and survive restarts. Sensitive AI
-          credentials are managed in the backend <code>backend/.env</code> file and are never
-          shown or stored on this screen.
+          credentials are managed in the backend <code>.env</code> file (<code>backend/.env</code> in
+          development, the BUILDX data folder in installed builds) and are never shown or stored
+          on this screen.
         </p>
       </div>
 
@@ -485,7 +486,7 @@ export default function Settings({ onSettingsChange = () => {} } = {}) {
             <h2 id="reset-title">Reset all settings to defaults?</h2>
             <p>
               This restores every preference to its safe default and cannot be undone. AI provider
-              credentials in <code>backend/.env</code> are not affected.
+              credentials in the backend <code>.env</code> file are not affected.
             </p>
             <div className="dialog-actions">
               <button className="button quiet-button" onClick={() => setResetConfirm(false)} disabled={working}>
@@ -789,7 +790,7 @@ function AIProviderSection({ status, loading, error, onTestConnection }) {
             <>
               <p className="ai-feedback">
                 The credential stays on the backend and is never sent to this screen. Change it
-                by editing <code>BUILDX_OPENAI_API_KEY</code> in <code>backend/.env</code>, then
+                by editing <code>BUILDX_OPENAI_API_KEY</code> in the backend <code>.env</code> file, then
                 restart BUILDX.
               </p>
               <button
@@ -801,7 +802,7 @@ function AIProviderSection({ status, loading, error, onTestConnection }) {
                 {loading ? 'Testing connection…' : 'Test connection'} <span aria-hidden="true">→</span>
               </button>
               <p className="settings-caption">
-                Credentials are managed in backend/.env on the backend. Clearing requires editing
+                Credentials are managed in the backend .env file. Clearing requires editing
                 that file and restarting BUILDX; no credential ever passes through this UI.
               </p>
             </>

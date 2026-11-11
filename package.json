@@ -14,7 +14,9 @@
     "test:core": "jest --config core/jest.config.js",
     "test:watch": "vitest",
     "lint": "eslint --ext .js,.jsx,.cjs,.mjs desktop/electron desktop/renderer/src *.mjs",
-    "check": "npm run lint && npm test && npm run build"
+    "check": "npm run lint && npm test && npm run build",
+    "build:backend": "cd backend && uv run --group build pyinstaller buildx-backend.spec --noconfirm --clean",
+    "dist": "npm run build && npm run build:backend && electron-builder --publish never"
   },
   "dependencies": {
     "@codemirror/lang-css": "6.3.1",
@@ -42,6 +44,7 @@
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^44.9.0",
+    "electron-builder": "^26.18.0",
     "eslint": "^9.39.0",
     "eslint-plugin-react": "^7.37.5",
     "globals": "^16.5.0",
@@ -52,5 +55,20 @@
     "vite": "^8.3.4",
     "vitest": "4.1.12",
     "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "dev.buildx.desktop",
+    "productName": "BUILDX",
+    "directories": { "output": "release" },
+    "files": [
+      "package.json",
+      "desktop/electron/**/*",
+      "!desktop/electron/**/*.test.*",
+      "desktop/renderer/dist/**/*"
+    ],
+    "extraResources": [{ "from": "backend/dist/buildx-backend", "to": "backend" }],
+    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.developer-tools" },
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage", "category": "Development" }
   }
 }

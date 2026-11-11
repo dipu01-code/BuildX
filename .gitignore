@@ -58,3 +58,6 @@ htmlcov/
 
 # Graphify knowledge-graph outputs (never commit)
 graphify-out/
+
+# Packaged app output
+release/

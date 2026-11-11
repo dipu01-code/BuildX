@@ -11,14 +11,25 @@ function resolvePython(backendDir, env = process.env) {
   return process.platform === 'win32' ? 'python' : 'python3';
 }
 
+// Installed builds ship a PyInstaller executable; development runs Python from backend/.venv.
+// The bundled backend runs in the data folder so it reads `.env` from there, not from inside the app.
+function backendCommand(backendDir, dataDir, env = process.env, platform = process.platform) {
+  const bundled = path.join(backendDir, platform === 'win32' ? 'buildx-backend.exe' : 'buildx-backend');
+  if (!env.BUILDX_PYTHON && fs.existsSync(bundled)) {
+    return { command: bundled, cwd: dataDir, migrate: ['migrate'], serve: ['serve'] };
+  }
+  return { command: resolvePython(backendDir, env), cwd: backendDir, migrate: ['-m', 'alembic', 'upgrade', 'head'], serve: ['-m', 'app'] };
+}
+
 function spawnProcess(command, args, options) {
   return spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 function runMigrations({ backendDir, dataDir, env = process.env, spawnImpl = spawnProcess }) {
   return new Promise((resolve, reject) => {
-    const child = spawnImpl(resolvePython(backendDir, env), ['-m', 'alembic', 'upgrade', 'head'], {
-      cwd: backendDir,
+    const backend = backendCommand(backendDir, dataDir, env);
+    const child = spawnImpl(backend.command, backend.migrate, {
+      cwd: backend.cwd,
       env: { ...env, BUILDX_HOST: '127.0.0.1', BUILDX_DATA_DIR: dataDir },
     });
     let stderr = '';
@@ -48,8 +59,9 @@ function runMigrations({ backendDir, dataDir, env = process.env, spawnImpl = spa
 
 function startBackend({ backendDir, dataDir, env = process.env, spawnImpl = spawnProcess }) {
   return new Promise((resolve, reject) => {
-    const child = spawnImpl(resolvePython(backendDir, env), ['-m', 'app'], {
-      cwd: backendDir,
+    const backend = backendCommand(backendDir, dataDir, env);
+    const child = spawnImpl(backend.command, backend.serve, {
+      cwd: backend.cwd,
       env: {
         ...env,
         BUILDX_HOST: '127.0.0.1',
@@ -108,4 +120,4 @@ function startBackend({ backendDir, dataDir, env = process.env, spawnImpl = spaw
   });
 }
 
-module.exports = { resolvePython, runMigrations, startBackend };
+module.exports = { backendCommand, resolvePython, runMigrations, startBackend };
