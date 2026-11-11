@@ -24,6 +24,8 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+# shortcut: httpx2 (Starlette's preferred test client) needs Python 3.11+; switch to it when 3.10 support is dropped.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 
 [tool.uv]
 package = false

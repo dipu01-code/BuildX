@@ -179,8 +179,13 @@ The conversational assistant treats project excerpts as untrusted data and canno
 - OpenAI is the only provider. Assistant responses are non-streaming and require network access for generation.
 - The conversational assistant does not edit files or run commands itself; file changes go through Phase 12 single-file proposals that you review and approve.
 - Desktop packaging/installers and a release workflow are not configured yet.
-- There is no repository `LICENSE` file; no license has been configured.
 
 ## Contributing
 
 Use a focused branch for changes. Review migrations before applying them, run the relevant desktop and backend checks, and keep credentials, local databases, and generated output out of commits. Submit changes with a concise description of behavior and verification performed.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the same checks on every push and pull request to `main`: `npm run check` and `npm run test:core` on Ubuntu and macOS, and backend `pytest` on Python 3.10 and 3.13.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

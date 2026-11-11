@@ -4,6 +4,7 @@
   "private": true,
   "type": "commonjs",
   "description": "BUILDX local-first desktop development environment",
+  "license": "MIT",
   "main": "desktop/electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1 --strictPort\" \"wait-on tcp:5173 && cross-env BUILDX_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",

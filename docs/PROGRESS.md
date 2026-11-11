@@ -29,7 +29,7 @@ Resume point for future sessions. Update this file at the end of every phase.
 | 14 | Testing and AI debugging | Done | `4b138cc` |
 | 15 | Git integration (Source control tab) | Done | see `git log` |
 | 16 | Settings and operational reliability | Done | `b421f45` + `43b0530` |
-| 17 | CI and release hygiene (CI workflow, LICENSE, httpx warning) | Not started | — |
+| 17 | CI and release hygiene (CI workflow, LICENSE, httpx warning) | Done | see `git log` |
 | 18 | Packaging, installers, release workflow | Not started | — |
 
 ## Phase 16 completion (2026-11-10, committed in `43b0530`)
@@ -54,6 +54,12 @@ Commit `b421f45` stored settings but services did not use them. Completion work:
 - Commit requires the reviewed staged paths to match the current index.
 - `GitPanel.jsx` is the Source control tab. Details in `docs/development.md`.
 
+## Phase 17 (2026-11-11)
+
+- `.github/workflows/ci.yml`: desktop `npm ci`, `npm run check`, `npm run test:core` on Ubuntu and macOS (Node 22, Electron binary download skipped); backend `uv sync --locked` + `pytest` on Python 3.10 and 3.13.
+- MIT `LICENSE`, `"license": "MIT"` in `package.json`.
+- Starlette's `httpx` test-client deprecation warning is filtered in `backend/pyproject.toml`.
+
 ## Open items needing a decision
 
 - `core/` + `cli/` (coding-problem engine from the "Day-2" hand-over) is not used by the desktop app; decide whether it belongs in BUILDX.
@@ -63,5 +69,5 @@ Commit `b421f45` stored settings but services did not use them. Completion work:
 
 - Packaging blocker (Phase 18): Electron launches Python from `backend/.venv`; an installed app needs a bundled backend.
 - Electron main-process errors go to the console only (backend logs go to a file).
-- No CI workflow and no LICENSE file.
-- Starlette deprecation warning about `httpx` in backend tests.
+- Backend tests use `httpx` with a filtered Starlette deprecation warning; switch to `httpx2` when Python 3.10 support is dropped (httpx2 needs 3.11+).
+- CI does not run on Windows.
